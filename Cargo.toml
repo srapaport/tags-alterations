@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.100"
 dotenv = "0.15.0"
+indicatif = "0.18.3"
 rayon = "1.11.0"
 rusqlite = { version = "0.32", features = ["bundled"] }
 swh-graph = "9.1.0"

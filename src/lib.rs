@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
 use anyhow::Result;
+use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use rusqlite::{Connection, params};
 use swh_graph::{NodeType, graph::*, labels::EdgeLabel};
@@ -52,7 +53,7 @@ fn format_counters() -> String {
     )
 }
 
-pub fn tags_check_full<G: SwhFullGraph + Sync>(graph: &G) -> Result<()> {
+pub fn tags_check_full<G: SwhFullGraph + Sync>(graph: &G, amount_origins: u64) -> Result<()> {
     let conn = Connection::open("tags_alterations.db")?;
     conn.execute(
         "CREATE TABLE IF NOT EXISTS tag_inconsistencies (
@@ -67,11 +68,21 @@ pub fn tags_check_full<G: SwhFullGraph + Sync>(graph: &G) -> Result<()> {
     
     let conn = Mutex::new(conn);
     
+    // Create progress bar
+    let pb = ProgressBar::new(amount_origins);
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} origins ({eta})")
+            .unwrap()
+            .progress_chars("#>-")
+    );
+    
     (0..graph.num_nodes())
         .into_par_iter()
         .filter(|node| graph.properties().node_type(*node) == NodeType::Origin)
         .for_each(|origin| {
             let Some(inconsistencies) = tags_check_origin(origin, graph) else {
+                pb.inc(1);
                 return;
             };
             
@@ -88,7 +99,11 @@ pub fn tags_check_full<G: SwhFullGraph + Sync>(graph: &G) -> Result<()> {
                     }
                 }
             }
+            
+            pb.inc(1);
         });
+    
+    pb.finish_with_message("Processing complete");
     
     // Write counters to log file
     let mut log_file = File::create("tags_alterations.log")?;
