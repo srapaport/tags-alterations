@@ -21,6 +21,8 @@ static COUNTER_NOT_RELEASE: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_INVALID_REVS_COUNT: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_TAG_ALTERATION: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_TAG_REMOVAL: AtomicUsize = AtomicUsize::new(0);
+static COUNTER_URL_NOT_FOUND: AtomicUsize = AtomicUsize::new(0);
+static COUNTER_URL_NOT_UTF8: AtomicUsize = AtomicUsize::new(0);
 
 pub fn display_counters() {
     println!("{}", format_counters());
@@ -37,6 +39,8 @@ fn format_counters() -> String {
          Branches not containing '/tags/': {}\n\
          Tag successors not releases: {}\n\
          Releases with invalid revision count (!=1): {}\n\
+         Url not found: {}\n\
+         Url not utf8: {}\n\
          Tags modified: {}\n\
          Tags deleted: {}\n\
          ======================================\n",
@@ -48,17 +52,19 @@ fn format_counters() -> String {
         COUNTER_NOT_TAG_BRANCH.load(Ordering::Relaxed),
         COUNTER_NOT_RELEASE.load(Ordering::Relaxed),
         COUNTER_INVALID_REVS_COUNT.load(Ordering::Relaxed),
+        COUNTER_URL_NOT_FOUND.load(Ordering::Relaxed),
+        COUNTER_URL_NOT_UTF8.load(Ordering::Relaxed),
         COUNTER_TAG_ALTERATION.load(Ordering::Relaxed),
         COUNTER_TAG_REMOVAL.load(Ordering::Relaxed),
     )
 }
 
 pub fn tags_check_full<G: SwhFullGraph + Sync>(graph: &G, amount_origins: u64) -> Result<()> {
-    let conn = Connection::open("tags_alterations.db")?;
+    let conn = Connection::open("tags_alterations_teaser_2024.db")?;
     conn.execute(
         "CREATE TABLE IF NOT EXISTS tag_inconsistencies (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            origin_node INTEGER NOT NULL,
+            origin_url TEXT NOT NULL,
             tag_name TEXT NOT NULL,
             old_revision INTEGER NOT NULL,
             new_revision INTEGER
@@ -79,9 +85,17 @@ pub fn tags_check_full<G: SwhFullGraph + Sync>(graph: &G, amount_origins: u64) -
         .into_par_iter()
         .filter(|node| graph.properties().node_type(*node) == NodeType::Origin)
         .filter_map(|origin| {
+            let Some(origin_bytes) = graph.properties().message(origin) else {
+                COUNTER_URL_NOT_FOUND.fetch_add(1, Ordering::Relaxed);
+                return None;
+            };
+            let Ok(origin_url) = String::from_utf8(origin_bytes) else {
+                COUNTER_URL_NOT_UTF8.fetch_add(1, Ordering::Relaxed);
+                return None;
+            };
             let inconsistencies = tags_check_origin(origin, graph)?;
             pb.inc(1);
-            Some((origin, inconsistencies))
+            Some((origin_url, inconsistencies))
         })
         .collect();
 
@@ -89,7 +103,7 @@ pub fn tags_check_full<G: SwhFullGraph + Sync>(graph: &G, amount_origins: u64) -
 
     // Batch write to database (single-threaded phase)
     let mut stmt = conn.prepare(
-        "INSERT INTO tag_inconsistencies (origin_node, tag_name, old_revision, new_revision) 
+        "INSERT INTO tag_inconsistencies (origin_url, tag_name, old_revision, new_revision) 
          VALUES (?1, ?2, ?3, ?4)",
     )?;
 
@@ -109,7 +123,7 @@ pub fn tags_check_full<G: SwhFullGraph + Sync>(graph: &G, amount_origins: u64) -
     drop(stmt);
     tx.commit()?;
 
-    let mut log_file = File::create("tags_alterations.log")?;
+    let mut log_file = File::create("tags_alterations_teaser_2024.log")?;
     log_file.write_all(format_counters().as_bytes())?;
     display_counters();
 
