@@ -2,7 +2,6 @@ use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::io::Write;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Mutex;
 
 use anyhow::Result;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -66,9 +65,7 @@ pub fn tags_check_full<G: SwhFullGraph + Sync>(graph: &G, amount_origins: u64) -
         )",
         [],
     )?;
-    
-    let conn = Mutex::new(conn);
-    
+
     let pb = ProgressBar::new(amount_origins);
     pb.set_style(
         ProgressStyle::default_bar()
@@ -76,39 +73,46 @@ pub fn tags_check_full<G: SwhFullGraph + Sync>(graph: &G, amount_origins: u64) -
             .unwrap()
             .progress_chars("#>-")
     );
-    
-    (0..graph.num_nodes())
+
+    // Collect all results first (parallel phase)
+    let all_results: Vec<_> = (0..graph.num_nodes())
         .into_par_iter()
         .filter(|node| graph.properties().node_type(*node) == NodeType::Origin)
-        .for_each(|origin| {
-            let Some(inconsistencies) = tags_check_origin(origin, graph) else {
-                pb.inc(1);
-                return;
-            };
-            
-            // Write inconsistencies to the database
-            if !inconsistencies.is_empty() {
-                let conn = conn.lock().unwrap();
-                for (tag_name, alterations) in inconsistencies {
-                    for (old_revision, new_revision) in alterations {
-                        let _ = conn.execute(
-                            "INSERT INTO tag_inconsistencies (origin_node, tag_name, old_revision, new_revision) 
-                             VALUES (?1, ?2, ?3, ?4)",
-                            params![origin, tag_name, old_revision as i64, new_revision.map(|r| r as i64)],
-                        );
-                    }
-                }
-            }
-            
+        .filter_map(|origin| {
+            let inconsistencies = tags_check_origin(origin, graph)?;
             pb.inc(1);
-        });
-    
+            Some((origin, inconsistencies))
+        })
+        .collect();
+
     pb.finish_with_message("Processing complete");
-    
+
+    // Batch write to database (single-threaded phase)
+    let mut stmt = conn.prepare(
+        "INSERT INTO tag_inconsistencies (origin_node, tag_name, old_revision, new_revision) 
+         VALUES (?1, ?2, ?3, ?4)",
+    )?;
+
+    let tx = conn.unchecked_transaction()?;
+    for (origin, inconsistencies) in all_results {
+        for (tag_name, alterations) in inconsistencies {
+            for (old_revision, new_revision) in alterations {
+                stmt.execute(params![
+                    origin,
+                    tag_name,
+                    old_revision as i64,
+                    new_revision.map(|r| r as i64)
+                ])?;
+            }
+        }
+    }
+    drop(stmt);
+    tx.commit()?;
+
     let mut log_file = File::create("tags_alterations.log")?;
     log_file.write_all(format_counters().as_bytes())?;
     display_counters();
-    
+
     Ok(())
 }
 
@@ -152,22 +156,22 @@ fn compute_inconsistencies(
     current_tags: &HashMap<String, usize>,
     next_tags: &HashMap<String, usize>,
 ) {
-    for current_tag in current_tags {
-        if let Some(next_tag) = next_tags.get(current_tag.0) {
-            if *next_tag == *current_tag.1 {
+    for (tag_name, &current_rev) in current_tags {
+        if let Some(&next_rev) = next_tags.get(tag_name) {
+            if next_rev == current_rev {
                 continue;
             }
             COUNTER_TAG_ALTERATION.fetch_add(1, Ordering::Relaxed);
             inconsistencies
-                .entry(current_tag.0.clone())
-                .or_insert_with(|| Vec::new())
-                .push((*current_tag.1, Some(*next_tag)));
+                .entry(tag_name.clone())
+                .or_default()
+                .push((current_rev, Some(next_rev)));
         } else {
             COUNTER_TAG_REMOVAL.fetch_add(1, Ordering::Relaxed);
             inconsistencies
-                .entry(current_tag.0.clone())
-                .or_insert_with(|| Vec::new())
-                .push((*current_tag.1, None));
+                .entry(tag_name.clone())
+                .or_default()
+                .push((current_rev, None));
         }
     }
 }
@@ -182,9 +186,9 @@ fn tags_check_origin<G: SwhFullGraph>(
             COUNTER_NOT_SNAPSHOT.fetch_add(1, Ordering::Relaxed);
             continue;
         }
-        for label in labels{
-            if let EdgeLabel::Visit(visit) = label{
-                if visit.status() != VisitStatus::Full{
+        for label in labels {
+            if let EdgeLabel::Visit(visit) = label {
+                if visit.status() != VisitStatus::Full {
                     COUNTER_VISIT_PARTIAL.fetch_add(1, Ordering::Relaxed);
                     continue;
                 }
@@ -201,12 +205,16 @@ fn tags_check_origin<G: SwhFullGraph>(
     }
 
     let mut inconsistencies = HashMap::new();
-    let current_snapshot = snapshots_queue.pop_front().unwrap();
-    let mut current_tags = get_tags(current_snapshot.0, graph);
-    while let Some(next_snapshot) = snapshots_queue.pop_front() {
-        let next_tags = get_tags(next_snapshot.0, graph);
+    let (first_snapshot, _) = snapshots_queue.pop_front().unwrap();
+    let mut current_tags = get_tags(first_snapshot, graph);
+
+    for (next_snapshot, _) in snapshots_queue {
+        let next_tags = get_tags(next_snapshot, graph);
         compute_inconsistencies(&mut inconsistencies, &current_tags, &next_tags);
         current_tags = next_tags;
+    }
+    if inconsistencies.is_empty() {
+        return None;
     }
     Some(inconsistencies)
 }
