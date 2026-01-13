@@ -21,6 +21,7 @@ target
 #.idea/
 
 .env
+*.tmp
 # Added by cargo
 
 /target
