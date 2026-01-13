@@ -59,15 +59,21 @@ fn format_counters() -> String {
     )
 }
 
-pub fn tags_check_full<G: SwhFullGraph + Sync>(graph: &G, amount_origins: u64) -> Result<()> {
-    let conn = Connection::open("tags_alterations_teaser_2024.db")?;
+pub fn tags_check_full<G: SwhFullGraph + Sync>(
+    graph: &G,
+    amount_origins: u64,
+    suffix: &str,
+) -> Result<()> {
+    let conn = Connection::open(format!("data/tags_alterations_{}.db", suffix))?;
     conn.execute(
         "CREATE TABLE IF NOT EXISTS tag_inconsistencies (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             origin_url TEXT NOT NULL,
             tag_name TEXT NOT NULL,
-            old_revision INTEGER NOT NULL,
-            new_revision INTEGER
+            old_snapshot TEXT NOT NULL,
+            old_revision TEXT NOT NULL,
+            new_snapshot TEXT NOT NULL,
+            new_revision TEXT
         )",
         [],
     )?;
@@ -103,19 +109,21 @@ pub fn tags_check_full<G: SwhFullGraph + Sync>(graph: &G, amount_origins: u64) -
 
     // Batch write to database (single-threaded phase)
     let mut stmt = conn.prepare(
-        "INSERT INTO tag_inconsistencies (origin_url, tag_name, old_revision, new_revision) 
-         VALUES (?1, ?2, ?3, ?4)",
+        "INSERT INTO tag_inconsistencies (origin_url, tag_name, old_snapshot, old_revision, new_snapshot, new_revision) 
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
     )?;
 
     let tx = conn.unchecked_transaction()?;
     for (origin, inconsistencies) in all_results {
         for (tag_name, alterations) in inconsistencies {
-            for (old_revision, new_revision) in alterations {
+            for (old_snapshot, old_revision, new_snapshot, new_revision) in alterations {
                 stmt.execute(params![
                     origin,
                     tag_name,
-                    old_revision as i64,
-                    new_revision.map(|r| r as i64)
+                    old_snapshot,
+                    old_revision,
+                    new_snapshot,
+                    new_revision.map(|r| r)
                 ])?;
             }
         }
@@ -123,7 +131,7 @@ pub fn tags_check_full<G: SwhFullGraph + Sync>(graph: &G, amount_origins: u64) -
     drop(stmt);
     tx.commit()?;
 
-    let mut log_file = File::create("tags_alterations_teaser_2024.log")?;
+    let mut log_file = File::create(format!("data/tags_alterations_{}.log", suffix))?;
     log_file.write_all(format_counters().as_bytes())?;
     display_counters();
 
@@ -165,27 +173,38 @@ fn get_tags<G: SwhFullGraph>(snapshot: usize, graph: &G) -> HashMap<String, usiz
     tags
 }
 
-fn compute_inconsistencies(
-    inconsistencies: &mut HashMap<String, Vec<(usize, Option<usize>)>>,
+fn compute_inconsistencies<G: SwhFullGraph>(
+    inconsistencies: &mut HashMap<String, Vec<(String, String, String, Option<String>)>>,
     current_tags: &HashMap<String, usize>,
+    current_snapshot: usize,
     next_tags: &HashMap<String, usize>,
+    next_snapshot: usize,
+    graph: &G,
 ) {
+    let current_snapshot_swhid = graph.properties().swhid(current_snapshot).to_string();
+    let next_snapshot_swhid = graph.properties().swhid(next_snapshot).to_string();
     for (tag_name, &current_rev) in current_tags {
+        let current_rev_swhid = graph.properties().swhid(current_rev).to_string();
         if let Some(&next_rev) = next_tags.get(tag_name) {
             if next_rev == current_rev {
                 continue;
             }
+            let next_rev_swhid = graph.properties().swhid(next_rev).to_string();
             COUNTER_TAG_ALTERATION.fetch_add(1, Ordering::Relaxed);
-            inconsistencies
-                .entry(tag_name.clone())
-                .or_default()
-                .push((current_rev, Some(next_rev)));
+            inconsistencies.entry(tag_name.clone()).or_default().push((
+                current_snapshot_swhid.clone(),
+                current_rev_swhid,
+                next_snapshot_swhid.clone(),
+                Some(next_rev_swhid),
+            ));
         } else {
             COUNTER_TAG_REMOVAL.fetch_add(1, Ordering::Relaxed);
-            inconsistencies
-                .entry(tag_name.clone())
-                .or_default()
-                .push((current_rev, None));
+            inconsistencies.entry(tag_name.clone()).or_default().push((
+                current_snapshot_swhid.clone(),
+                current_rev_swhid,
+                next_snapshot_swhid.clone(),
+                None,
+            ));
         }
     }
 }
@@ -193,7 +212,7 @@ fn compute_inconsistencies(
 fn tags_check_origin<G: SwhFullGraph>(
     origin: usize,
     graph: &G,
-) -> Option<HashMap<String, Vec<(usize, Option<usize>)>>> {
+) -> Option<HashMap<String, Vec<(String, String, String, Option<String>)>>> {
     let mut snapshots = vec![];
     for (succ, labels) in graph.labeled_successors(origin) {
         if graph.properties().node_type(succ) != NodeType::Snapshot {
@@ -219,12 +238,20 @@ fn tags_check_origin<G: SwhFullGraph>(
     }
 
     let mut inconsistencies = HashMap::new();
-    let (first_snapshot, _) = snapshots_queue.pop_front().unwrap();
-    let mut current_tags = get_tags(first_snapshot, graph);
+    let mut current_snapshot = snapshots_queue.pop_front().unwrap().0;
+    let mut current_tags = get_tags(current_snapshot, graph);
 
     for (next_snapshot, _) in snapshots_queue {
         let next_tags = get_tags(next_snapshot, graph);
-        compute_inconsistencies(&mut inconsistencies, &current_tags, &next_tags);
+        compute_inconsistencies(
+            &mut inconsistencies,
+            &current_tags,
+            current_snapshot,
+            &next_tags,
+            next_snapshot,
+            graph,
+        );
+        current_snapshot = next_snapshot;
         current_tags = next_tags;
     }
     if inconsistencies.is_empty() {
