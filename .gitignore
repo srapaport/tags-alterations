@@ -22,6 +22,8 @@ target
 
 .env
 *.tmp
+*.db
+*.log
 # Added by cargo
 
 /target
