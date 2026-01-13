@@ -8,12 +8,13 @@ use anyhow::Result;
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use rusqlite::{Connection, params};
+use swh_graph::labels::VisitStatus;
 use swh_graph::{NodeType, graph::*, labels::EdgeLabel};
 
 // Static counters for defensive programming
 static COUNTER_ORIGIN_CHECK_ERROR: AtomicUsize = AtomicUsize::new(0);
+static COUNTER_VISIT_PARTIAL: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_NOT_SNAPSHOT: AtomicUsize = AtomicUsize::new(0);
-static COUNTER_NO_COMMITTER_TIMESTAMP: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_INSUFFICIENT_SNAPSHOTS: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_INVALID_UTF8_BRANCH_NAME: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_NOT_TAG_BRANCH: AtomicUsize = AtomicUsize::new(0);
@@ -30,8 +31,8 @@ fn format_counters() -> String {
     format!(
         "\n=== Defensive Programming Counters ===\n\
          Origin check errors: {}\n\
+         Partial visits: {}\n\
          Successors not snapshots: {}\n\
-         Snapshots without committer timestamp: {}\n\
          Origins with insufficient snapshots (<2): {}\n\
          Invalid UTF-8 branch names: {}\n\
          Branches not containing '/tags/': {}\n\
@@ -41,8 +42,8 @@ fn format_counters() -> String {
          Tags deleted: {}\n\
          ======================================\n",
         COUNTER_ORIGIN_CHECK_ERROR.load(Ordering::Relaxed),
+        COUNTER_VISIT_PARTIAL.load(Ordering::Relaxed),
         COUNTER_NOT_SNAPSHOT.load(Ordering::Relaxed),
-        COUNTER_NO_COMMITTER_TIMESTAMP.load(Ordering::Relaxed),
         COUNTER_INSUFFICIENT_SNAPSHOTS.load(Ordering::Relaxed),
         COUNTER_INVALID_UTF8_BRANCH_NAME.load(Ordering::Relaxed),
         COUNTER_NOT_TAG_BRANCH.load(Ordering::Relaxed),
@@ -68,7 +69,6 @@ pub fn tags_check_full<G: SwhFullGraph + Sync>(graph: &G, amount_origins: u64) -
     
     let conn = Mutex::new(conn);
     
-    // Create progress bar
     let pb = ProgressBar::new(amount_origins);
     pb.set_style(
         ProgressStyle::default_bar()
@@ -105,7 +105,6 @@ pub fn tags_check_full<G: SwhFullGraph + Sync>(graph: &G, amount_origins: u64) -
     
     pb.finish_with_message("Processing complete");
     
-    // Write counters to log file
     let mut log_file = File::create("tags_alterations.log")?;
     log_file.write_all(format_counters().as_bytes())?;
     display_counters();
@@ -178,15 +177,19 @@ fn tags_check_origin<G: SwhFullGraph>(
     graph: &G,
 ) -> Option<HashMap<String, Vec<(usize, Option<usize>)>>> {
     let mut snapshots = vec![];
-    for succ in graph.successors(origin) {
+    for (succ, labels) in graph.labeled_successors(origin) {
         if graph.properties().node_type(succ) != NodeType::Snapshot {
             COUNTER_NOT_SNAPSHOT.fetch_add(1, Ordering::Relaxed);
             continue;
         }
-        if let Some(timestamp) = graph.properties().committer_timestamp(succ) {
-            snapshots.push((succ, timestamp));
-        } else {
-            COUNTER_NO_COMMITTER_TIMESTAMP.fetch_add(1, Ordering::Relaxed);
+        for label in labels{
+            if let EdgeLabel::Visit(visit) = label{
+                if visit.status() != VisitStatus::Full{
+                    COUNTER_VISIT_PARTIAL.fetch_add(1, Ordering::Relaxed);
+                    continue;
+                }
+                snapshots.push((succ, visit.timestamp()));
+            }
         }
     }
     snapshots.sort_unstable_by_key(|snapshot| snapshot.1);
