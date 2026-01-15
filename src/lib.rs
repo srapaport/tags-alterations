@@ -26,6 +26,7 @@ static COUNTER_TAG_ALTERATION: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_TAG_REMOVAL: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_URL_NOT_FOUND: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_URL_NOT_UTF8: AtomicUsize = AtomicUsize::new(0);
+static COUNTER_REV_NO_TIMESTAMP: AtomicUsize = AtomicUsize::new(0);
 
 pub fn display_counters() {
     println!("{}", format_counters());
@@ -44,6 +45,7 @@ fn format_counters() -> String {
          Releases with invalid revision count (!=1): {}\n\
          Url not found: {}\n\
          Url not utf8: {}\n\
+         Revision without timestamps: {}\n\
          Tags modified: {}\n\
          Tags deleted: {}\n\
          ======================================\n",
@@ -57,6 +59,7 @@ fn format_counters() -> String {
         COUNTER_INVALID_REVS_COUNT.load(Ordering::Relaxed),
         COUNTER_URL_NOT_FOUND.load(Ordering::Relaxed),
         COUNTER_URL_NOT_UTF8.load(Ordering::Relaxed),
+        COUNTER_REV_NO_TIMESTAMP.load(Ordering::Relaxed),
         COUNTER_TAG_ALTERATION.load(Ordering::Relaxed),
         COUNTER_TAG_REMOVAL.load(Ordering::Relaxed),
     )
@@ -65,7 +68,7 @@ fn format_counters() -> String {
 fn get_tags<G: SwhFullGraph>(
     snapshot: usize,
     graph: &G,
-) -> HashMap<String, (usize, Option<usize>)> {
+) -> HashMap<String, (usize, i64, Option<usize>)> {
     let mut tags = HashMap::new();
     for (succ, labels) in graph.labeled_successors(snapshot) {
         for label in labels {
@@ -92,7 +95,11 @@ fn get_tags<G: SwhFullGraph>(
                             Err(_) => None,
                             Ok(root_dir) => root_dir,
                         };
-                        tags.insert(branch_name, (rev, root_dir));
+                        let Some(timestamp) = graph.properties().committer_timestamp(rev) else {
+                            COUNTER_REV_NO_TIMESTAMP.fetch_add(1, Ordering::Relaxed);
+                            continue;
+                        };
+                        tags.insert(branch_name, (rev, timestamp, root_dir));
                     } else {
                         COUNTER_INVALID_REVS_COUNT.fetch_add(1, Ordering::Relaxed);
                     }
@@ -110,14 +117,14 @@ fn compute_inconsistencies<G: SwhFullGraph>(
         String,
         Vec<(
             (String, u64),
-            (String, Option<String>),
+            (String, i64, Option<String>),
             (String, u64),
-            Option<(String, Option<String>)>,
+            Option<(String, i64, Option<String>)>,
         )>,
     >,
-    current_tags: &HashMap<String, (usize, Option<usize>)>,
+    current_tags: &HashMap<String, (usize, i64, Option<usize>)>,
     current_snapshot: (usize, u64),
-    next_tags: &HashMap<String, (usize, Option<usize>)>,
+    next_tags: &HashMap<String, (usize, i64, Option<usize>)>,
     next_snapshot: (usize, u64),
     graph: &G,
 ) {
@@ -125,7 +132,7 @@ fn compute_inconsistencies<G: SwhFullGraph>(
     let next_snapshot_swhid = graph.properties().swhid(next_snapshot.0).to_string();
     for (tag_name, &current_rev) in current_tags {
         let current_rev_swhid = graph.properties().swhid(current_rev.0).to_string();
-        let current_root_dir_swhid = match current_rev.1 {
+        let current_root_dir_swhid = match current_rev.2 {
             None => None,
             Some(root_dir) => Some(graph.properties().swhid(root_dir).to_string()),
         };
@@ -134,22 +141,22 @@ fn compute_inconsistencies<G: SwhFullGraph>(
                 continue;
             }
             let next_rev_swhid = graph.properties().swhid(next_rev.0).to_string();
-            let next_root_dir_swhid = match next_rev.1 {
+            let next_root_dir_swhid = match next_rev.2 {
                 None => None,
                 Some(root_dir) => Some(graph.properties().swhid(root_dir).to_string()),
             };
             COUNTER_TAG_ALTERATION.fetch_add(1, Ordering::Relaxed);
             inconsistencies.entry(tag_name.clone()).or_default().push((
                 (current_snapshot_swhid.clone(), current_snapshot.1),
-                (current_rev_swhid, current_root_dir_swhid),
+                (current_rev_swhid, current_rev.1, current_root_dir_swhid),
                 (next_snapshot_swhid.clone(), next_snapshot.1),
-                Some((next_rev_swhid, next_root_dir_swhid)),
+                Some((next_rev_swhid, next_rev.1, next_root_dir_swhid)),
             ));
         } else {
             COUNTER_TAG_REMOVAL.fetch_add(1, Ordering::Relaxed);
             inconsistencies.entry(tag_name.clone()).or_default().push((
                 (current_snapshot_swhid.clone(), current_snapshot.1),
-                (current_rev_swhid, current_root_dir_swhid),
+                (current_rev_swhid, current_rev.1, current_root_dir_swhid),
                 (next_snapshot_swhid.clone(), next_snapshot.1),
                 None,
             ));
@@ -160,7 +167,17 @@ fn compute_inconsistencies<G: SwhFullGraph>(
 fn tags_check_origin<G: SwhFullGraph>(
     origin: usize,
     graph: &G,
-) -> Option<HashMap<String, Vec<((String, u64), (String, Option<String>), (String, u64), Option<(String, Option<String>)>)>>> {
+) -> Option<
+    HashMap<
+        String,
+        Vec<(
+            (String, u64),
+            (String, i64, Option<String>),
+            (String, u64),
+            Option<(String, i64, Option<String>)>,
+        )>,
+    >,
+> {
     let mut snapshots = vec![];
     for (succ, labels) in graph.labeled_successors(origin) {
         if graph.properties().node_type(succ) != NodeType::Snapshot {
@@ -228,12 +245,14 @@ pub fn tags_check_full<G: SwhFullGraph + Sync>(
             origin_url TEXT NOT NULL,
             tag_name TEXT NOT NULL,
             old_snapshot TEXT NOT NULL,
-            old_timestamp INTEGER NOT NULL,
+            old_snap_timestamp INTEGER NOT NULL,
             old_revision TEXT NOT NULL,
+            old_rev_timestamp INTEGER NOT NULL,
             old_root_dir TEXT,
             new_snapshot TEXT NOT NULL,
-            new_timestamp INTEGER NOT NULL,
+            new_snap_timestamp INTEGER NOT NULL,
             new_revision TEXT,
+            new_rev_timestamp INTEGER,
             new_root_dir TEXT
         )",
         [],
@@ -249,7 +268,15 @@ pub fn tags_check_full<G: SwhFullGraph + Sync>(
 
     let (sender, receiver) = mpsc::channel::<(
         String,
-        HashMap<String, Vec<((String, u64), (String, Option<String>), (String, u64), Option<(String, Option<String>)>)>>,
+        HashMap<
+            String,
+            Vec<(
+                (String, u64),
+                (String, i64, Option<String>),
+                (String, u64),
+                Option<(String, i64, Option<String>)>,
+            )>,
+        >,
     )>();
 
     // writer thread
@@ -305,6 +332,7 @@ pub fn tags_check_full<G: SwhFullGraph + Sync>(
         .into_par_iter()
         .filter(|node| graph.properties().node_type(*node) == NodeType::Origin)
         .filter_map(|origin| {
+            pb.inc(1);
             let Some(origin_bytes) = graph.properties().message(origin) else {
                 COUNTER_URL_NOT_FOUND.fetch_add(1, Ordering::Relaxed);
                 return None;
@@ -314,7 +342,6 @@ pub fn tags_check_full<G: SwhFullGraph + Sync>(
                 return None;
             };
             let inconsistencies = tags_check_origin(origin, graph)?;
-            pb.inc(1);
             Some((origin_url, inconsistencies))
         })
         .for_each_with(sender, |s, result| {
@@ -337,21 +364,29 @@ fn write_batch(
     conn: &Connection,
     batch: &[(
         String,
-        HashMap<String, Vec<((String, u64), (String, Option<String>), (String, u64), Option<(String, Option<String>)>)>>,
+        HashMap<
+            String,
+            Vec<(
+                (String, u64),
+                (String, i64, Option<String>),
+                (String, u64),
+                Option<(String, i64, Option<String>)>,
+            )>,
+        >,
     )],
 ) -> Result<()> {
     let mut stmt = conn.prepare_cached(
-        "INSERT INTO tag_inconsistencies (origin_url, tag_name, old_snapshot, old_timestamp, old_revision, old_root_dir, new_snapshot, new_timestamp, new_revision, new_root_dir) 
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        "INSERT INTO tag_inconsistencies (origin_url, tag_name, old_snapshot, old_snap_timestamp, old_revision, old_rev_timestamp, old_root_dir, new_snapshot, new_snap_timestamp, new_revision, new_rev_timestamp, new_root_dir) 
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
     )?;
 
     let tx = conn.unchecked_transaction()?;
     for (origin, inconsistencies) in batch {
         for (tag_name, alterations) in inconsistencies {
             for (old_snapshot, old_revision, new_snapshot, new_revision) in alterations {
-                let (nr, nrd) = match new_revision{
-                    None=> (None, None),
-                    Some(elt)=> (Some(elt.0.clone()), elt.1.clone()),
+                let (nr, nts, nrd) = match new_revision {
+                    None => (None, None, None),
+                    Some(elt) => (Some(elt.0.clone()), Some(elt.1), elt.2.clone()),
                 };
                 stmt.execute(params![
                     origin,
@@ -359,10 +394,12 @@ fn write_batch(
                     old_snapshot.0,
                     old_snapshot.1,
                     old_revision.0,
-                    old_revision.1.as_ref(),
+                    old_revision.1,
+                    old_revision.2.as_ref(),
                     new_snapshot.0,
                     new_snapshot.1,
                     nr,
+                    nts,
                     nrd
                 ])?;
             }
