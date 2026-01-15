@@ -14,6 +14,6 @@ fn main() -> Result<()> {
         .load_all_properties::<DynMphf>()?
         .load_forward_labels()?
         .load_backward_labels()?;
-    tags_alterations::tags_check_full(&graph, amount_origins, "teaser_2024")?;
+    tags_alterations::tags_check_full(&graph, amount_origins, "full_2025-05")?;
     Ok(())
 }
