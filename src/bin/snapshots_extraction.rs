@@ -39,11 +39,13 @@ struct SnapshotInfo {
 fn main() -> Result<()> {
     let orc_dir = "/swh/scratch/graph/2025-10-08/orc/origin_visit_status/";
     let suffix = "full_2025-10";
+    //let orc_dir = "/home/infres/rapaport/datasets/2025-05-28-popular-1k/orc/origin_visit_status/";
+    //let suffix = "teaser_2025";
     let origin_snapshots = Arc::new(Mutex::new(HashMap::<String, Vec<SnapshotInfo>>::new()));
 
     let entries: Vec<_> = fs::read_dir(orc_dir)?
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("orc"))
+        //.filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("orc"))
         .collect();
 
     let total_files = entries.len();
