@@ -134,13 +134,15 @@ fn compute_inconsistencies<G: SwhFullGraph>(
     inconsistencies: &mut HashMap<
         String,
         Vec<(
-            (String, u64, u64),
+            (u64, u64, u64),
+            (String, u64),
             (String, i64, Option<String>),
-            (String, u64, u64),
+            (String, u64),
             Option<(String, i64, Option<String>)>,
         )>,
     >,
     count_snapshot: u64,
+    min_delta: u64,
     cumulative_tags: &mut HashMap<String, (usize, i64, Option<usize>, u64)>,
     current_snapshot: (usize, u64),
     next_tags: HashMap<String, (usize, i64, Option<usize>, u64)>,
@@ -165,13 +167,10 @@ fn compute_inconsistencies<G: SwhFullGraph>(
 
             COUNTER_TAG_ALTERATION.fetch_add(1, Ordering::Relaxed);
             inconsistencies.entry(tag_name.clone()).or_default().push((
-                (
-                    current_snapshot_swhid.clone(),
-                    current_snapshot.1,
-                    current_tag.3,
-                ),
+                (current_tag.3, next_tag.3, min_delta),
+                (current_snapshot_swhid.clone(), current_snapshot.1),
                 (current_rev_swhid, current_tag.1, current_root_dir_swhid),
-                (next_snapshot_swhid.clone(), next_snapshot.1, next_tag.3),
+                (next_snapshot_swhid.clone(), next_snapshot.1),
                 Some((next_rev_swhid, next_tag.1, next_root_dir_swhid)),
             ));
             cumulative_tags.insert(tag_name.clone(), next_tag);
@@ -183,13 +182,10 @@ fn compute_inconsistencies<G: SwhFullGraph>(
 
             COUNTER_TAG_REMOVAL.fetch_add(1, Ordering::Relaxed);
             inconsistencies.entry(tag_name.clone()).or_default().push((
-                (
-                    current_snapshot_swhid.clone(),
-                    current_snapshot.1,
-                    current_tag.3,
-                ),
+                (current_tag.3, count_snapshot, min_delta),
+                (current_snapshot_swhid.clone(), current_snapshot.1),
                 (current_rev_swhid, current_tag.1, current_root_dir_swhid),
-                (next_snapshot_swhid.clone(), next_snapshot.1, count_snapshot),
+                (next_snapshot_swhid.clone(), next_snapshot.1),
                 None,
             ));
             cumulative_tags.remove(&tag_name);
@@ -210,9 +206,10 @@ fn tags_check_origin<G: SwhFullGraph>(
     HashMap<
         String,
         Vec<(
-            (String, u64, u64),
+            (u64, u64, u64),
+            (String, u64),
             (String, i64, Option<String>),
-            (String, u64, u64),
+            (String, u64),
             Option<(String, i64, Option<String>)>,
         )>,
     >,
@@ -242,19 +239,20 @@ fn tags_check_origin<G: SwhFullGraph>(
     let mut inconsistencies = HashMap::new();
     let mut snapshots_iter = snapshots.into_iter();
     let (mut current_snapshot, mut current_ts) = snapshots_iter.next().unwrap();
-    let mut previous_ts = current_ts;
+    let mut min_delta = current_ts;
     let mut cumulative_tags = get_tags(current_snapshot, count_snapshot, graph);
 
     for (next_snapshot, next_ts) in snapshots_iter {
         count_snapshot += 1;
         if next_snapshot == current_snapshot {
-            previous_ts = next_ts;
+            min_delta = next_ts;
             continue;
         }
         let next_tags = get_tags(next_snapshot, count_snapshot, graph);
         compute_inconsistencies(
             &mut inconsistencies,
             count_snapshot,
+            min_delta,
             &mut cumulative_tags,
             (current_snapshot, current_ts),
             next_tags,
@@ -263,6 +261,7 @@ fn tags_check_origin<G: SwhFullGraph>(
         );
         current_snapshot = next_snapshot;
         current_ts = next_ts;
+        min_delta = next_ts;
     }
     if inconsistencies.is_empty() {
         return None;
@@ -278,7 +277,7 @@ pub fn tags_check_full<G: SwhFullGraph + Sync>(
     const DB_BATCH_SIZE: usize = 10_000;
 
     //let db = Arc::new(DB::open_default(rocksdb_path)?);
-    let snapshots = snapshots_extraction()?;
+    let snapshots = snapshots_extraction(suffix)?;
     //let total_origins = db.iterator(rocksdb::IteratorMode::Start).count() as u64;
     let total_origins = snapshots.len();
     println!("Total origins in RocksDB: {}", total_origins);
@@ -321,7 +320,8 @@ pub fn tags_check_full<G: SwhFullGraph + Sync>(
                 new_snap_timestamp INTEGER NOT NULL,
                 new_revision TEXT,
                 new_rev_timestamp INTEGER,
-                new_root_dir TEXT
+                new_root_dir TEXT,
+                min_delta INTEGER NOT NULL
             )",
             [],
         )?;
@@ -455,23 +455,24 @@ fn write_batch(
         HashMap<
             String,
             Vec<(
-                (String, u64, u64),
+                (u64, u64, u64),
+                (String, u64),
                 (String, i64, Option<String>),
-                (String, u64, u64),
+                (String, u64),
                 Option<(String, i64, Option<String>)>,
             )>,
         >,
     )],
 ) -> Result<()> {
     let mut stmt = conn.prepare_cached(
-        "INSERT INTO tag_inconsistencies (origin_url, tag_name, old_snapshot, old_snapshot_cpt, old_snap_timestamp, old_revision, old_rev_timestamp, old_root_dir, new_snapshot, new_snapshot_cpt, new_snap_timestamp, new_revision, new_rev_timestamp, new_root_dir) 
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+        "INSERT INTO tag_inconsistencies (origin_url, tag_name, old_snapshot, old_snapshot_cpt, old_snap_timestamp, old_revision, old_rev_timestamp, old_root_dir, new_snapshot, new_snapshot_cpt, new_snap_timestamp, new_revision, new_rev_timestamp, new_root_dir, min_delta) 
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
     )?;
 
     let tx = conn.unchecked_transaction()?;
     for (origin, inconsistencies) in batch {
         for (tag_name, alterations) in inconsistencies {
-            for (old_snapshot, old_revision, new_snapshot, new_revision) in alterations {
+            for (min_delta, old_snapshot, old_revision, new_snapshot, new_revision) in alterations {
                 let (nr, nts, nrd) = match new_revision {
                     None => (None, None, None),
                     Some(elt) => (Some(elt.0.clone()), Some(elt.1), elt.2.clone()),
@@ -480,17 +481,18 @@ fn write_batch(
                     origin,
                     tag_name,
                     old_snapshot.0,
-                    old_snapshot.2,
+                    min_delta.0,
                     old_snapshot.1,
                     old_revision.0,
                     old_revision.1,
                     old_revision.2.as_ref(),
                     new_snapshot.0,
-                    new_snapshot.2,
+                    min_delta.1,
                     new_snapshot.1,
                     nr,
                     nts,
-                    nrd
+                    nrd,
+                    min_delta.2
                 ])?;
             }
         }
@@ -500,11 +502,14 @@ fn write_batch(
     Ok(())
 }
 
-fn snapshots_extraction() -> Result<HashMap<String, Vec<SnapshotInfo>>> {
-    let orc_dir = "/swh/scratch/graph/2025-10-08/orc/origin_visit_status/";
-    let suffix = "full_2025-10";
-    // let orc_dir = "/home/infres/rapaport/datasets/2025-05-28-popular-1k/orc/origin_visit_status/";
-    // let suffix = "teaser_2025-05";
+fn snapshots_extraction(suffix: &str) -> Result<HashMap<String, Vec<SnapshotInfo>>> {
+    let orc_dir = match suffix{
+        "full_2025-10" => "/swh/scratch/graph/2025-10-08/orc/origin_visit_status/",
+        "teaser_2025-05" => "/swh/scratch/rapaport/datasets/2025-05-28-popular-1k/orc/origin_visit_status/",
+        _ => {
+            return Err(anyhow::anyhow!("unknown dataset suffix"));
+        }
+    };
     let origin_snapshots = Arc::new(Mutex::new(HashMap::<String, Vec<SnapshotInfo>>::new()));
 
     let entries: Vec<_> = fs::read_dir(orc_dir)?
@@ -577,7 +582,7 @@ fn snapshots_extraction() -> Result<HashMap<String, Vec<SnapshotInfo>>> {
     let mut log_file = File::create(format!("data/snapshots_extraction_{}.log", suffix))?;
     log_file.write_all(format!("Total origins: {}\n", total_origins).as_bytes())?;
     log_file.write_all(format!("Total snapshots: {}\n", total_snapshots).as_bytes())?;
-    log_file.write_all(format_counters().as_bytes())?;
+    log_file.write_all(format_counters_bis().as_bytes())?;
     display_counters_bis();
     Ok(origin_snapshots)
 }
