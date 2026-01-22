@@ -1,4 +1,3 @@
-pub mod lib_tmp;
 use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::io::Write;
