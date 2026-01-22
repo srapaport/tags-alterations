@@ -1,17 +1,18 @@
-use std::collections::HashMap;
-use std::fs::File;
-use std::io::Write;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::thread;
-use std::time::Instant;
-
 use anyhow::Result;
+use arrow::array::*;
 use indicatif::{ProgressBar, ProgressStyle};
-//use rayon::prelude::*;
-use rocksdb::DB;
+use rayon::prelude::*;
+//use rocksdb::DB;
 use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fs::{self, File};
+use std::io::Write;
+use std::path::Path;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Instant;
 use swh_graph::{NodeType, graph::*, labels::EdgeLabel};
 
 // Static counters for defensive programming
@@ -25,7 +26,24 @@ static COUNTER_TAG_ALTERATION: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_TAG_REMOVAL: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_REV_NO_TIMESTAMP: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_DESERIALIZATION_ERROR: AtomicUsize = AtomicUsize::new(0);
+static COUNTER_NOT_FULL_SNAP: AtomicUsize = AtomicUsize::new(0);
+static COUNTER_NOT_GIT_VISIT: AtomicUsize = AtomicUsize::new(0);
+static COUNTER_SNAPSHOTS: AtomicUsize = AtomicUsize::new(0);
 
+fn format_counters_bis() -> String {
+    format!(
+        "\n=== Defensive Programming Counters ===\n\
+         Partial visits: {}\n\
+         Visit type not `git`: {}\n\
+         ======================================\n",
+        COUNTER_NOT_FULL_SNAP.load(std::sync::atomic::Ordering::Relaxed),
+        COUNTER_NOT_GIT_VISIT.load(std::sync::atomic::Ordering::Relaxed),
+    )
+}
+
+fn display_counters_bis() {
+    println!("{}", format_counters_bis());
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct SnapshotInfo {
     date_seconds: i64,
@@ -66,8 +84,9 @@ fn format_counters() -> String {
 
 fn get_tags<G: SwhFullGraph>(
     snapshot: usize,
+    count_snapshot: u64,
     graph: &G,
-) -> HashMap<String, (usize, i64, Option<usize>)> {
+) -> HashMap<String, (usize, i64, Option<usize>, u64)> {
     let mut tags = HashMap::new();
     for (succ, labels) in graph.labeled_successors(snapshot) {
         for label in labels {
@@ -98,7 +117,7 @@ fn get_tags<G: SwhFullGraph>(
                             COUNTER_REV_NO_TIMESTAMP.fetch_add(1, Ordering::Relaxed);
                             continue;
                         };
-                        tags.insert(branch_name, (rev, timestamp, root_dir));
+                        tags.insert(branch_name, (rev, timestamp, root_dir, count_snapshot));
                     } else {
                         COUNTER_INVALID_REVS_COUNT.fetch_add(1, Ordering::Relaxed);
                     }
@@ -115,50 +134,71 @@ fn compute_inconsistencies<G: SwhFullGraph>(
     inconsistencies: &mut HashMap<
         String,
         Vec<(
-            (String, u64),
+            (String, u64, u64),
             (String, i64, Option<String>),
-            (String, u64),
+            (String, u64, u64),
             Option<(String, i64, Option<String>)>,
         )>,
     >,
-    current_tags: &HashMap<String, (usize, i64, Option<usize>)>,
+    count_snapshot: u64,
+    cumulative_tags: &mut HashMap<String, (usize, i64, Option<usize>, u64)>,
     current_snapshot: (usize, u64),
-    next_tags: &HashMap<String, (usize, i64, Option<usize>)>,
+    next_tags: HashMap<String, (usize, i64, Option<usize>, u64)>,
     next_snapshot: (usize, u64),
     graph: &G,
 ) {
     let current_snapshot_swhid = graph.properties().swhid(current_snapshot.0).to_string();
     let next_snapshot_swhid = graph.properties().swhid(next_snapshot.0).to_string();
-    for (tag_name, &current_rev) in current_tags {
-        let current_rev_swhid = graph.properties().swhid(current_rev.0).to_string();
-        let current_root_dir_swhid = match current_rev.2 {
-            None => None,
-            Some(root_dir) => Some(graph.properties().swhid(root_dir).to_string()),
-        };
-        if let Some(&next_rev) = next_tags.get(tag_name) {
-            if next_rev.0 == current_rev.0 {
+    for (tag_name, current_tag) in cumulative_tags.clone() {
+        if let Some(&next_tag) = next_tags.get(&tag_name) {
+            if next_tag.0 == current_tag.0 {
                 continue;
             }
-            let next_rev_swhid = graph.properties().swhid(next_rev.0).to_string();
-            let next_root_dir_swhid = match next_rev.2 {
-                None => None,
-                Some(root_dir) => Some(graph.properties().swhid(root_dir).to_string()),
-            };
+            let current_rev_swhid = graph.properties().swhid(current_tag.0).to_string();
+            let current_root_dir_swhid = current_tag
+                .2
+                .map(|root_dir| graph.properties().swhid(root_dir).to_string());
+            let next_rev_swhid = graph.properties().swhid(next_tag.0).to_string();
+            let next_root_dir_swhid = next_tag
+                .2
+                .map(|root_dir| graph.properties().swhid(root_dir).to_string());
+
             COUNTER_TAG_ALTERATION.fetch_add(1, Ordering::Relaxed);
             inconsistencies.entry(tag_name.clone()).or_default().push((
-                (current_snapshot_swhid.clone(), current_snapshot.1),
-                (current_rev_swhid, current_rev.1, current_root_dir_swhid),
-                (next_snapshot_swhid.clone(), next_snapshot.1),
-                Some((next_rev_swhid, next_rev.1, next_root_dir_swhid)),
+                (
+                    current_snapshot_swhid.clone(),
+                    current_snapshot.1,
+                    current_tag.3,
+                ),
+                (current_rev_swhid, current_tag.1, current_root_dir_swhid),
+                (next_snapshot_swhid.clone(), next_snapshot.1, next_tag.3),
+                Some((next_rev_swhid, next_tag.1, next_root_dir_swhid)),
             ));
+            cumulative_tags.insert(tag_name.clone(), next_tag);
         } else {
+            let current_rev_swhid = graph.properties().swhid(current_tag.0).to_string();
+            let current_root_dir_swhid = current_tag
+                .2
+                .map(|root_dir| graph.properties().swhid(root_dir).to_string());
+
             COUNTER_TAG_REMOVAL.fetch_add(1, Ordering::Relaxed);
             inconsistencies.entry(tag_name.clone()).or_default().push((
-                (current_snapshot_swhid.clone(), current_snapshot.1),
-                (current_rev_swhid, current_rev.1, current_root_dir_swhid),
-                (next_snapshot_swhid.clone(), next_snapshot.1),
+                (
+                    current_snapshot_swhid.clone(),
+                    current_snapshot.1,
+                    current_tag.3,
+                ),
+                (current_rev_swhid, current_tag.1, current_root_dir_swhid),
+                (next_snapshot_swhid.clone(), next_snapshot.1, count_snapshot),
                 None,
             ));
+            cumulative_tags.remove(&tag_name);
+        }
+    }
+
+    for (tag_name, next_tag) in next_tags {
+        if !cumulative_tags.contains_key(&tag_name) {
+            cumulative_tags.insert(tag_name, next_tag);
         }
     }
 }
@@ -170,9 +210,9 @@ fn tags_check_origin<G: SwhFullGraph>(
     HashMap<
         String,
         Vec<(
-            (String, u64),
+            (String, u64, u64),
             (String, i64, Option<String>),
-            (String, u64),
+            (String, u64, u64),
             Option<(String, i64, Option<String>)>,
         )>,
     >,
@@ -182,7 +222,11 @@ fn tags_check_origin<G: SwhFullGraph>(
         let Some(snapshot_swhid) = info.snapshot else {
             continue;
         };
-        let Ok(snapshot_node) = graph.properties().node_id(snapshot_swhid.as_str()) else {
+        //println!("snapshot swhid: {}", snapshot_swhid);
+        let Ok(snapshot_node) = graph
+            .properties()
+            .node_id(format!("swh:1:snp:{}", snapshot_swhid).as_str())
+        else {
             COUNTER_SNAPSHOT_NOT_IN_GRAPH.fetch_add(1, Ordering::Relaxed);
             continue;
         };
@@ -194,27 +238,31 @@ fn tags_check_origin<G: SwhFullGraph>(
         return None;
     }
 
+    let mut count_snapshot = 0;
     let mut inconsistencies = HashMap::new();
     let mut snapshots_iter = snapshots.into_iter();
     let (mut current_snapshot, mut current_ts) = snapshots_iter.next().unwrap();
-    let mut current_tags = get_tags(current_snapshot, graph);
+    let mut previous_ts = current_ts;
+    let mut cumulative_tags = get_tags(current_snapshot, count_snapshot, graph);
 
     for (next_snapshot, next_ts) in snapshots_iter {
+        count_snapshot += 1;
         if next_snapshot == current_snapshot {
+            previous_ts = next_ts;
             continue;
         }
-        let next_tags = get_tags(next_snapshot, graph);
+        let next_tags = get_tags(next_snapshot, count_snapshot, graph);
         compute_inconsistencies(
             &mut inconsistencies,
-            &current_tags,
+            count_snapshot,
+            &mut cumulative_tags,
             (current_snapshot, current_ts),
-            &next_tags,
+            next_tags,
             (next_snapshot, next_ts),
             graph,
         );
         current_snapshot = next_snapshot;
         current_ts = next_ts;
-        current_tags = next_tags;
     }
     if inconsistencies.is_empty() {
         return None;
@@ -224,37 +272,65 @@ fn tags_check_origin<G: SwhFullGraph>(
 
 pub fn tags_check_full<G: SwhFullGraph + Sync>(
     graph: &G,
-    rocksdb_path: &str,
+    //rocksdb_path: &str,
     suffix: &str,
 ) -> Result<()> {
-    const BATCH_SIZE: usize = 10_000;
+    const DB_BATCH_SIZE: usize = 10_000;
 
-    let db = Arc::new(DB::open_default(rocksdb_path)?);
-
-    let total_origins = db.iterator(rocksdb::IteratorMode::Start).count() as u64;
+    //let db = Arc::new(DB::open_default(rocksdb_path)?);
+    let snapshots = snapshots_extraction()?;
+    //let total_origins = db.iterator(rocksdb::IteratorMode::Start).count() as u64;
+    let total_origins = snapshots.len();
     println!("Total origins in RocksDB: {}", total_origins);
 
     let conn = Connection::open(format!("data/tags_alterations_{}.db", suffix))?;
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS tag_inconsistencies (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            origin_url TEXT NOT NULL,
-            tag_name TEXT NOT NULL,
-            old_snapshot TEXT NOT NULL,
-            old_snap_timestamp INTEGER NOT NULL,
-            old_revision TEXT NOT NULL,
-            old_rev_timestamp INTEGER NOT NULL,
-            old_root_dir TEXT,
-            new_snapshot TEXT NOT NULL,
-            new_snap_timestamp INTEGER NOT NULL,
-            new_revision TEXT,
-            new_rev_timestamp INTEGER,
-            new_root_dir TEXT
-        )",
-        [],
-    )?;
 
-    let pb = ProgressBar::new(total_origins);
+    // Checkpointing
+    let table_exists = conn
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='tag_inconsistencies'")
+        .and_then(|mut stmt| stmt.exists([]))
+        .unwrap_or(false);
+
+    let processed_origins = if table_exists {
+        println!("Found existing database, loading checkpoint...");
+        let mut stmt = conn.prepare("SELECT DISTINCT origin_url FROM tag_inconsistencies")?;
+        let origins: std::collections::HashSet<String> = stmt
+            .query_map([], |row| row.get(0))?
+            .filter_map(|r| r.ok())
+            .collect();
+        println!(
+            "Checkpoint loaded: {} origins already processed",
+            origins.len()
+        );
+        Arc::new(origins)
+    } else {
+        println!("No checkpoint found, starting fresh");
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS tag_inconsistencies (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                origin_url TEXT NOT NULL,
+                tag_name TEXT NOT NULL,
+                old_snapshot TEXT NOT NULL,
+                old_snapshot_cpt INTEGER NOT NULL,
+                old_snap_timestamp INTEGER NOT NULL,
+                old_revision TEXT NOT NULL,
+                old_rev_timestamp INTEGER NOT NULL,
+                old_root_dir TEXT,
+                new_snapshot TEXT NOT NULL,
+                new_snapshot_cpt INTEGER NOT NULL,
+                new_snap_timestamp INTEGER NOT NULL,
+                new_revision TEXT,
+                new_rev_timestamp INTEGER,
+                new_root_dir TEXT
+            )",
+            [],
+        )?;
+        Arc::new(std::collections::HashSet::new())
+    };
+
+    drop(conn);
+
+    let pb = ProgressBar::new(total_origins as u64);
     pb.set_style(
         ProgressStyle::default_bar()
             .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} origins ({eta})")
@@ -262,97 +338,107 @@ pub fn tags_check_full<G: SwhFullGraph + Sync>(
             .progress_chars("#>-")
     );
 
-    let (sender, receiver) = crossbeam_channel::unbounded::<(
-        String,
-        HashMap<
-            String,
-            Vec<(
-                (String, u64),
-                (String, i64, Option<String>),
-                (String, u64),
-                Option<(String, i64, Option<String>)>,
-            )>,
-        >,
-    )>();
-
-    let db_suffix = suffix.to_string();
-    let pb_clone = pb.clone();
     let start_time = Instant::now();
+
+    let (work_sender, work_receiver) =
+        crossbeam_channel::unbounded::<(String, Vec<SnapshotInfo>)>();
+    let (result_sender, result_receiver) = crossbeam_channel::unbounded();
+
+    // Writer thread
+    let db_suffix = suffix.to_string();
     let writer_handle = thread::spawn(move || -> Result<()> {
         let conn = Connection::open(format!("data/tags_alterations_{}.db", db_suffix))?;
-        let mut batch = Vec::with_capacity(BATCH_SIZE);
-        let mut batches_written = 0;
-        let mut batch_start = Instant::now();
+        let mut write_batch_buffer = Vec::with_capacity(DB_BATCH_SIZE);
+        let mut total_written = 0;
+        println!("Writer worker on standby, ready to write");
+        for result in result_receiver {
+            write_batch_buffer.push(result);
 
-        for result in receiver {
-            batch.push(result);
-
-            if batch.len() >= BATCH_SIZE {
-                write_batch(&conn, &batch)?;
-                let batch_duration = batch_start.elapsed();
-                batches_written += 1;
-                let total_elapsed = start_time.elapsed();
-                pb_clone.println(format!(
-                    "✓ Batch {} written ({} origins) - batch: {:.2}s, total: {:.2}s",
-                    batches_written,
-                    batches_written * BATCH_SIZE,
-                    batch_duration.as_secs_f64(),
-                    total_elapsed.as_secs_f64()
-                ));
-                batch.clear();
-                batch_start = Instant::now();
+            if write_batch_buffer.len() >= DB_BATCH_SIZE {
+                write_batch(&conn, &write_batch_buffer)?;
+                total_written += write_batch_buffer.len();
+                println!(
+                    "✓ Written {} origins - {:.2}s",
+                    total_written,
+                    start_time.elapsed().as_secs_f64()
+                );
+                write_batch_buffer.clear();
             }
         }
 
-        if !batch.is_empty() {
-            write_batch(&conn, &batch)?;
-            let batch_duration = batch_start.elapsed();
-            batches_written += 1;
-            let total_elapsed = start_time.elapsed();
-            let total_origins = batches_written * BATCH_SIZE - (BATCH_SIZE - batch.len());
-            pb_clone.println(format!(
-                "✓ Final batch {} written ({} origins) - batch: {:.2}s, total: {:.2}s",
-                batches_written,
-                total_origins,
-                batch_duration.as_secs_f64(),
-                total_elapsed.as_secs_f64()
-            ));
+        if !write_batch_buffer.is_empty() {
+            write_batch(&conn, &write_batch_buffer)?;
+            total_written += write_batch_buffer.len();
+            println!(
+                "✓ Final: {} origins - {:.2}s",
+                total_written,
+                start_time.elapsed().as_secs_f64()
+            );
         }
-
         Ok(())
     });
 
-    rayon::scope(|s| {
-        for item in db.iterator(rocksdb::IteratorMode::Start) {
-            let Ok((key, value)) = item else {
-                continue;
-            };
-            let Ok(origin_url) = String::from_utf8(key.to_vec()) else {
-                continue;
-            };
-            let Ok(snapshot_infos) = serde_json::from_slice::<Vec<SnapshotInfo>>(&value) else {
-                COUNTER_DESERIALIZATION_ERROR.fetch_add(1, Ordering::Relaxed);
-                continue;
-            };
-            // let snapshots = snapshot_infos
-            //     .into_iter()
-            //     .filter_map(|snap| snap.snapshot)
-            //     .collect::<Vec<String>>();
-            let sender = sender.clone();
+    let num_workers = rayon::current_num_threads() / 2;
+    //println!("Starting {} worker threads", num_workers);
+
+    std::thread::scope(|s| {
+        println!("Spawning {} workers (compute inconsistencies)", num_workers);
+        for _ in 0..num_workers {
+            let work_rx = work_receiver.clone();
+            let result_tx = result_sender.clone();
             let pb = pb.clone();
-            s.spawn(move |_| {
-                pb.inc(1);
-                if let Some(inconsistencies) = tags_check_origin(snapshot_infos, graph) {
-                    let _ = sender.send((origin_url, inconsistencies));
+
+            s.spawn(move || {
+                for (origin_url, snapshot_infos) in work_rx {
+                    if let Some(inconsistencies) = tags_check_origin(snapshot_infos, graph) {
+                        let _ = result_tx.send((origin_url, inconsistencies));
+                    }
+                    pb.inc(1);
                 }
             });
         }
+
+        let mut skipped_count = 0;
+        println!("Feeding the workers");
+        // for item in db.iterator(rocksdb::IteratorMode::Start) {
+        //     let Ok((key, value)) = item else {
+        //         continue;
+        //     };
+        //     let Ok(origin_url) = String::from_utf8(key.to_vec()) else {
+        //         continue;
+        //     };
+
+        //     // Checkpointing
+        //     if processed_origins.contains(&origin_url) {
+        //         skipped_count += 1;
+        //         pb.inc(1);
+        //         continue;
+        //     }
+
+        //     let Ok(snapshot_infos) = serde_json::from_slice::<Vec<SnapshotInfo>>(&value) else {
+        //         COUNTER_DESERIALIZATION_ERROR.fetch_add(1, Ordering::Relaxed);
+        //         continue;
+        //     };
+
+        //     work_sender.send((origin_url, snapshot_infos)).unwrap();
+        // }
+        for (origin_url, snapshot_infos) in snapshots {
+            if processed_origins.contains(&origin_url) {
+                skipped_count += 1;
+                pb.inc(1);
+                continue;
+            }
+            work_sender.send((origin_url, snapshot_infos)).unwrap();
+        }
+
+        println!("Skipped {} already processed origins", skipped_count);
+
+        drop(work_sender);
     });
 
     pb.finish_with_message("Processing complete");
 
-    drop(pb);
-    drop(sender);
+    drop(result_sender);
     writer_handle.join().expect("Writer thread panicked")?;
 
     let mut log_file = File::create(format!("data/tags_alterations_{}.log", suffix))?;
@@ -369,17 +455,17 @@ fn write_batch(
         HashMap<
             String,
             Vec<(
-                (String, u64),
+                (String, u64, u64),
                 (String, i64, Option<String>),
-                (String, u64),
+                (String, u64, u64),
                 Option<(String, i64, Option<String>)>,
             )>,
         >,
     )],
 ) -> Result<()> {
     let mut stmt = conn.prepare_cached(
-        "INSERT INTO tag_inconsistencies (origin_url, tag_name, old_snapshot, old_snap_timestamp, old_revision, old_rev_timestamp, old_root_dir, new_snapshot, new_snap_timestamp, new_revision, new_rev_timestamp, new_root_dir) 
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+        "INSERT INTO tag_inconsistencies (origin_url, tag_name, old_snapshot, old_snapshot_cpt, old_snap_timestamp, old_revision, old_rev_timestamp, old_root_dir, new_snapshot, new_snapshot_cpt, new_snap_timestamp, new_revision, new_rev_timestamp, new_root_dir) 
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
     )?;
 
     let tx = conn.unchecked_transaction()?;
@@ -394,11 +480,13 @@ fn write_batch(
                     origin,
                     tag_name,
                     old_snapshot.0,
+                    old_snapshot.2,
                     old_snapshot.1,
                     old_revision.0,
                     old_revision.1,
                     old_revision.2.as_ref(),
                     new_snapshot.0,
+                    new_snapshot.2,
                     new_snapshot.1,
                     nr,
                     nts,
@@ -410,4 +498,162 @@ fn write_batch(
     drop(stmt);
     tx.commit()?;
     Ok(())
+}
+
+fn snapshots_extraction() -> Result<HashMap<String, Vec<SnapshotInfo>>> {
+    let orc_dir = "/swh/scratch/graph/2025-10-08/orc/origin_visit_status/";
+    let suffix = "full_2025-10";
+    // let orc_dir = "/home/infres/rapaport/datasets/2025-05-28-popular-1k/orc/origin_visit_status/";
+    // let suffix = "teaser_2025-05";
+    let origin_snapshots = Arc::new(Mutex::new(HashMap::<String, Vec<SnapshotInfo>>::new()));
+
+    let entries: Vec<_> = fs::read_dir(orc_dir)?
+        .filter_map(|e| e.ok())
+        //.filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("orc"))
+        .collect();
+
+    let total_files = entries.len();
+    println!("Found {} ORC files to process", total_files);
+
+    let files_pb = Arc::new(ProgressBar::new(total_files as u64));
+    files_pb.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} files ({eta})")
+            .unwrap()
+            .progress_chars("##-"),
+    );
+    files_pb.tick();
+
+    entries.into_par_iter().for_each(|entry| {
+        let pb_clone = Arc::clone(&files_pb);
+        let path = entry.path();
+        match process_orc_file(&path) {
+            Ok(local_map) => {
+                let mut global_map = origin_snapshots.lock().unwrap();
+                for (origin, mut snapshots) in local_map {
+                    global_map
+                        .entry(origin)
+                        .or_insert_with(Vec::new)
+                        .append(&mut snapshots);
+                }
+            }
+            Err(e) => {
+                eprintln!("Error processing {:?}: {}", path, e);
+            }
+        }
+        pb_clone.inc(1);
+    });
+
+    files_pb.finish_with_message("All files processed");
+
+    let mut origin_snapshots = Arc::try_unwrap(origin_snapshots)
+        .unwrap()
+        .into_inner()
+        .unwrap();
+
+    let total_origins = origin_snapshots.len();
+    println!(
+        "Total origins with at least one *FULL* *git* visit: {}",
+        total_origins
+    );
+    let sort_pb = ProgressBar::new(origin_snapshots.len() as u64);
+    sort_pb.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.magenta/blue} {pos}/{len} origins with sorted snapshots ({eta})")
+            .unwrap()
+            .progress_chars("##-"),
+    );
+    for snapshots in origin_snapshots.values_mut() {
+        snapshots.sort_by_key(|s| s.date_seconds);
+        sort_pb.inc(1);
+    }
+    sort_pb.finish_with_message("Done sorting snapshots");
+
+    let total_snapshots = COUNTER_SNAPSHOTS.load(std::sync::atomic::Ordering::Relaxed);
+
+    println!("Total origins: {}", total_origins);
+    println!("Total snapshots: {}", total_snapshots);
+
+    let mut log_file = File::create(format!("data/snapshots_extraction_{}.log", suffix))?;
+    log_file.write_all(format!("Total origins: {}\n", total_origins).as_bytes())?;
+    log_file.write_all(format!("Total snapshots: {}\n", total_snapshots).as_bytes())?;
+    log_file.write_all(format_counters().as_bytes())?;
+    display_counters_bis();
+    Ok(origin_snapshots)
+}
+
+fn process_orc_file(path: &Path) -> Result<HashMap<String, Vec<SnapshotInfo>>> {
+    let mut local_snapshots: HashMap<String, Vec<SnapshotInfo>> = HashMap::new();
+
+    let file = fs::File::open(path)?;
+    let reader = orc_rust::ArrowReaderBuilder::try_new(file)?.build();
+    let record_batches = reader.collect::<Result<Vec<_>, _>>()?;
+
+    for record_batch in record_batches {
+        let num_rows = record_batch.num_rows();
+
+        let origin_col = record_batch
+            .column(0)
+            .as_any()
+            .downcast_ref::<StringArray>()
+            .unwrap();
+        let date_col = record_batch
+            .column(2)
+            .as_any()
+            .downcast_ref::<TimestampNanosecondArray>()
+            .unwrap();
+        let status_col = record_batch
+            .column(3)
+            .as_any()
+            .downcast_ref::<StringArray>()
+            .unwrap();
+        let snapshot_col = record_batch
+            .column(4)
+            .as_any()
+            .downcast_ref::<StringArray>()
+            .unwrap();
+        let type_col = record_batch
+            .column(5)
+            .as_any()
+            .downcast_ref::<StringArray>()
+            .unwrap();
+
+        for row_idx in 0..num_rows {
+            let status = status_col.value(row_idx).to_string();
+            if status != "full" {
+                COUNTER_NOT_FULL_SNAP.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                continue;
+            }
+
+            let type_val = type_col.value(row_idx);
+            if type_val != "git" {
+                COUNTER_NOT_GIT_VISIT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                continue;
+            }
+
+            let origin = origin_col.value(row_idx).to_string();
+            let date_nanos = date_col.value(row_idx);
+
+            let snapshot = if snapshot_col.is_null(row_idx) {
+                None
+            } else {
+                Some(snapshot_col.value(row_idx).to_string())
+            };
+
+            let date_seconds = date_nanos / 1_000_000_000;
+
+            let info = SnapshotInfo {
+                date_seconds,
+                status,
+                snapshot,
+            };
+            COUNTER_SNAPSHOTS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            local_snapshots
+                .entry(origin)
+                .or_insert_with(Vec::new)
+                .push(info);
+        }
+    }
+
+    Ok(local_snapshots)
 }
