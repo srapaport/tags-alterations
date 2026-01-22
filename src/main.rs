@@ -1,5 +1,6 @@
 use anyhow::{Result, anyhow};
 use dotenv::dotenv;
+use tags_alterations::lib_tmp;
 use std::env;
 use swh_graph::graph::*;
 use swh_graph::mph::DynMphf;
@@ -14,6 +15,7 @@ fn main() -> Result<()> {
         .load_all_properties::<DynMphf>()?
         .load_forward_labels()?
         .load_backward_labels()?;
-    tags_alterations::tags_check_full(&graph, amount_origins, "full_2025-10")?;
+    //tags_alterations::tags_check_full(&graph, amount_origins, "full_2025-10")?;
+    lib_tmp::tags_check_full(&graph, "data/snapshots_teaser_2025_db", "teaser_2025")?;
     Ok(())
 }

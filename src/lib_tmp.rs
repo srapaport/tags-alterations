@@ -1,22 +1,21 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::mpsc;
 use std::thread;
 use std::time::Instant;
 
 use anyhow::Result;
 use indicatif::{ProgressBar, ProgressStyle};
-use rayon::prelude::*;
+//use rayon::prelude::*;
+use rocksdb::DB;
 use rusqlite::{Connection, params};
-use swh_graph::labels::VisitStatus;
+use serde::{Deserialize, Serialize};
 use swh_graph::{NodeType, graph::*, labels::EdgeLabel};
 
 // Static counters for defensive programming
-static COUNTER_ORIGIN_CHECK_ERROR: AtomicUsize = AtomicUsize::new(0);
-static COUNTER_VISIT_PARTIAL: AtomicUsize = AtomicUsize::new(0);
-static COUNTER_NOT_SNAPSHOT: AtomicUsize = AtomicUsize::new(0);
+static COUNTER_SNAPSHOT_NOT_IN_GRAPH: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_INSUFFICIENT_SNAPSHOTS: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_INVALID_UTF8_BRANCH_NAME: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_NOT_TAG_BRANCH: AtomicUsize = AtomicUsize::new(0);
@@ -24,9 +23,15 @@ static COUNTER_NOT_RELEASE: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_INVALID_REVS_COUNT: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_TAG_ALTERATION: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_TAG_REMOVAL: AtomicUsize = AtomicUsize::new(0);
-static COUNTER_URL_NOT_FOUND: AtomicUsize = AtomicUsize::new(0);
-static COUNTER_URL_NOT_UTF8: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_REV_NO_TIMESTAMP: AtomicUsize = AtomicUsize::new(0);
+static COUNTER_DESERIALIZATION_ERROR: AtomicUsize = AtomicUsize::new(0);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SnapshotInfo {
+    date_seconds: i64,
+    status: String,
+    snapshot: Option<String>,
+}
 
 pub fn display_counters() {
     println!("{}", format_counters());
@@ -35,31 +40,25 @@ pub fn display_counters() {
 fn format_counters() -> String {
     format!(
         "\n=== Defensive Programming Counters ===\n\
-         Origin check errors: {}\n\
-         Partial visits: {}\n\
-         Successors not snapshots: {}\n\
+         Snapshots not found in graph: {}\n\
          Origins with insufficient snapshots (<2): {}\n\
          Invalid UTF-8 branch names: {}\n\
          Branches not containing '/tags/': {}\n\
          Tag successors not releases: {}\n\
          Releases with invalid revision count (!=1): {}\n\
-         Url not found: {}\n\
-         Url not utf8: {}\n\
          Revision without timestamps: {}\n\
+         Deserialization errors: {}\n\
          Tags modified: {}\n\
          Tags deleted: {}\n\
          ======================================\n",
-        COUNTER_ORIGIN_CHECK_ERROR.load(Ordering::Relaxed),
-        COUNTER_VISIT_PARTIAL.load(Ordering::Relaxed),
-        COUNTER_NOT_SNAPSHOT.load(Ordering::Relaxed),
+        COUNTER_SNAPSHOT_NOT_IN_GRAPH.load(Ordering::Relaxed),
         COUNTER_INSUFFICIENT_SNAPSHOTS.load(Ordering::Relaxed),
         COUNTER_INVALID_UTF8_BRANCH_NAME.load(Ordering::Relaxed),
         COUNTER_NOT_TAG_BRANCH.load(Ordering::Relaxed),
         COUNTER_NOT_RELEASE.load(Ordering::Relaxed),
         COUNTER_INVALID_REVS_COUNT.load(Ordering::Relaxed),
-        COUNTER_URL_NOT_FOUND.load(Ordering::Relaxed),
-        COUNTER_URL_NOT_UTF8.load(Ordering::Relaxed),
         COUNTER_REV_NO_TIMESTAMP.load(Ordering::Relaxed),
+        COUNTER_DESERIALIZATION_ERROR.load(Ordering::Relaxed),
         COUNTER_TAG_ALTERATION.load(Ordering::Relaxed),
         COUNTER_TAG_REMOVAL.load(Ordering::Relaxed),
     )
@@ -165,7 +164,7 @@ fn compute_inconsistencies<G: SwhFullGraph>(
 }
 
 fn tags_check_origin<G: SwhFullGraph>(
-    origin: usize,
+    snapshot_infos: Vec<SnapshotInfo>,
     graph: &G,
 ) -> Option<
     HashMap<
@@ -179,36 +178,28 @@ fn tags_check_origin<G: SwhFullGraph>(
     >,
 > {
     let mut snapshots = vec![];
-    for (succ, labels) in graph.labeled_successors(origin) {
-        if graph.properties().node_type(succ) != NodeType::Snapshot {
-            COUNTER_NOT_SNAPSHOT.fetch_add(1, Ordering::Relaxed);
+    for info in snapshot_infos {
+        let Some(snapshot_swhid) = info.snapshot else {
             continue;
-        }
-        for label in labels {
-            if let EdgeLabel::Visit(visit) = label {
-                if visit.status() != VisitStatus::Full {
-                    COUNTER_VISIT_PARTIAL.fetch_add(1, Ordering::Relaxed);
-                    continue;
-                }
-                snapshots.push((succ, visit.timestamp()));
-            }
-        }
+        };
+        let Ok(snapshot_node) = graph.properties().node_id(snapshot_swhid.as_str()) else {
+            COUNTER_SNAPSHOT_NOT_IN_GRAPH.fetch_add(1, Ordering::Relaxed);
+            continue;
+        };
+        snapshots.push((snapshot_node, info.date_seconds as u64));
     }
-    snapshots.sort_unstable_by_key(|snapshot| snapshot.1);
-    let mut snapshots_queue = VecDeque::from_iter(snapshots.into_iter());
-    // We need at least 2 snapshots to check tags alterations
-    if snapshots_queue.len() < 2 {
+
+    if snapshots.len() < 2 {
         COUNTER_INSUFFICIENT_SNAPSHOTS.fetch_add(1, Ordering::Relaxed);
         return None;
     }
 
     let mut inconsistencies = HashMap::new();
-    let (current_snapshot, current_ts) = snapshots_queue.pop_front().unwrap();
-    let mut current_snapshot = current_snapshot;
-    let mut current_ts = current_ts;
+    let mut snapshots_iter = snapshots.into_iter();
+    let (mut current_snapshot, mut current_ts) = snapshots_iter.next().unwrap();
     let mut current_tags = get_tags(current_snapshot, graph);
 
-    for (next_snapshot, next_ts) in snapshots_queue {
+    for (next_snapshot, next_ts) in snapshots_iter {
         if next_snapshot == current_snapshot {
             continue;
         }
@@ -233,10 +224,15 @@ fn tags_check_origin<G: SwhFullGraph>(
 
 pub fn tags_check_full<G: SwhFullGraph + Sync>(
     graph: &G,
-    amount_origins: u64,
+    rocksdb_path: &str,
     suffix: &str,
 ) -> Result<()> {
     const BATCH_SIZE: usize = 10_000;
+
+    let db = Arc::new(DB::open_default(rocksdb_path)?);
+
+    let total_origins = db.iterator(rocksdb::IteratorMode::Start).count() as u64;
+    println!("Total origins in RocksDB: {}", total_origins);
 
     let conn = Connection::open(format!("data/tags_alterations_{}.db", suffix))?;
     conn.execute(
@@ -258,7 +254,7 @@ pub fn tags_check_full<G: SwhFullGraph + Sync>(
         [],
     )?;
 
-    let pb = ProgressBar::new(amount_origins);
+    let pb = ProgressBar::new(total_origins);
     pb.set_style(
         ProgressStyle::default_bar()
             .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} origins ({eta})")
@@ -266,7 +262,7 @@ pub fn tags_check_full<G: SwhFullGraph + Sync>(
             .progress_chars("#>-")
     );
 
-    let (sender, receiver) = mpsc::channel::<(
+    let (sender, receiver) = crossbeam_channel::unbounded::<(
         String,
         HashMap<
             String,
@@ -279,7 +275,6 @@ pub fn tags_check_full<G: SwhFullGraph + Sync>(
         >,
     )>();
 
-    // writer thread
     let db_suffix = suffix.to_string();
     let pb_clone = pb.clone();
     let start_time = Instant::now();
@@ -327,30 +322,37 @@ pub fn tags_check_full<G: SwhFullGraph + Sync>(
         Ok(())
     });
 
-    // Process origins in parallel
-    (0..graph.num_nodes())
-        .into_par_iter()
-        .filter(|node| graph.properties().node_type(*node) == NodeType::Origin)
-        .filter_map(|origin| {
-            pb.inc(1);
-            let Some(origin_bytes) = graph.properties().message(origin) else {
-                COUNTER_URL_NOT_FOUND.fetch_add(1, Ordering::Relaxed);
-                return None;
+    rayon::scope(|s| {
+        for item in db.iterator(rocksdb::IteratorMode::Start) {
+            let Ok((key, value)) = item else {
+                continue;
             };
-            let Ok(origin_url) = String::from_utf8(origin_bytes) else {
-                COUNTER_URL_NOT_UTF8.fetch_add(1, Ordering::Relaxed);
-                return None;
+            let Ok(origin_url) = String::from_utf8(key.to_vec()) else {
+                continue;
             };
-            let inconsistencies = tags_check_origin(origin, graph)?;
-            Some((origin_url, inconsistencies))
-        })
-        .for_each_with(sender, |s, result| {
-            let _ = s.send(result);
-        });
+            let Ok(snapshot_infos) = serde_json::from_slice::<Vec<SnapshotInfo>>(&value) else {
+                COUNTER_DESERIALIZATION_ERROR.fetch_add(1, Ordering::Relaxed);
+                continue;
+            };
+            // let snapshots = snapshot_infos
+            //     .into_iter()
+            //     .filter_map(|snap| snap.snapshot)
+            //     .collect::<Vec<String>>();
+            let sender = sender.clone();
+            let pb = pb.clone();
+            s.spawn(move |_| {
+                pb.inc(1);
+                if let Some(inconsistencies) = tags_check_origin(snapshot_infos, graph) {
+                    let _ = sender.send((origin_url, inconsistencies));
+                }
+            });
+        }
+    });
 
     pb.finish_with_message("Processing complete");
 
     drop(pb);
+    drop(sender);
     writer_handle.join().expect("Writer thread panicked")?;
 
     let mut log_file = File::create(format!("data/tags_alterations_{}.log", suffix))?;
