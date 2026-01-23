@@ -84,9 +84,10 @@ fn format_counters() -> String {
 
 fn get_tags<G: SwhFullGraph>(
     snapshot: usize,
+    snap_timestamp: u64,
     count_snapshot: u64,
     graph: &G,
-) -> HashMap<String, (usize, i64, Option<usize>, u64)> {
+) -> HashMap<String, (usize, i64, Option<usize>, u64, usize, u64)> {
     let mut tags = HashMap::new();
     for (succ, labels) in graph.labeled_successors(snapshot) {
         for label in labels {
@@ -117,7 +118,17 @@ fn get_tags<G: SwhFullGraph>(
                             COUNTER_REV_NO_TIMESTAMP.fetch_add(1, Ordering::Relaxed);
                             continue;
                         };
-                        tags.insert(branch_name, (rev, timestamp, root_dir, count_snapshot));
+                        tags.insert(
+                            branch_name,
+                            (
+                                rev,
+                                timestamp,
+                                root_dir,
+                                count_snapshot,
+                                snapshot,
+                                snap_timestamp,
+                            ),
+                        );
                     } else {
                         COUNTER_INVALID_REVS_COUNT.fetch_add(1, Ordering::Relaxed);
                     }
@@ -143,15 +154,15 @@ fn compute_inconsistencies<G: SwhFullGraph>(
     >,
     count_snapshot: u64,
     min_delta: u64,
-    cumulative_tags: &mut HashMap<String, (usize, i64, Option<usize>, u64)>,
-    current_snapshot: (usize, u64),
-    next_tags: HashMap<String, (usize, i64, Option<usize>, u64)>,
+    cumulative_tags: &mut HashMap<String, (usize, i64, Option<usize>, u64, usize, u64)>,
+    //current_snapshot: (usize, u64),
+    next_tags: HashMap<String, (usize, i64, Option<usize>, u64, usize, u64)>,
     next_snapshot: (usize, u64),
     graph: &G,
 ) {
-    let current_snapshot_swhid = graph.properties().swhid(current_snapshot.0).to_string();
     let next_snapshot_swhid = graph.properties().swhid(next_snapshot.0).to_string();
     for (tag_name, current_tag) in cumulative_tags.clone() {
+        let current_snapshot_swhid = graph.properties().swhid(current_tag.4).to_string();
         if let Some(&next_tag) = next_tags.get(&tag_name) {
             if next_tag.0 == current_tag.0 {
                 continue;
@@ -168,7 +179,7 @@ fn compute_inconsistencies<G: SwhFullGraph>(
             COUNTER_TAG_ALTERATION.fetch_add(1, Ordering::Relaxed);
             inconsistencies.entry(tag_name.clone()).or_default().push((
                 (current_tag.3, next_tag.3, min_delta),
-                (current_snapshot_swhid.clone(), current_snapshot.1),
+                (current_snapshot_swhid.clone(), current_tag.5),
                 (current_rev_swhid, current_tag.1, current_root_dir_swhid),
                 (next_snapshot_swhid.clone(), next_snapshot.1),
                 Some((next_rev_swhid, next_tag.1, next_root_dir_swhid)),
@@ -183,7 +194,7 @@ fn compute_inconsistencies<G: SwhFullGraph>(
             COUNTER_TAG_REMOVAL.fetch_add(1, Ordering::Relaxed);
             inconsistencies.entry(tag_name.clone()).or_default().push((
                 (current_tag.3, count_snapshot, min_delta),
-                (current_snapshot_swhid.clone(), current_snapshot.1),
+                (current_snapshot_swhid.clone(), current_tag.5),
                 (current_rev_swhid, current_tag.1, current_root_dir_swhid),
                 (next_snapshot_swhid.clone(), next_snapshot.1),
                 None,
@@ -238,9 +249,9 @@ fn tags_check_origin<G: SwhFullGraph>(
     let mut count_snapshot = 0;
     let mut inconsistencies = HashMap::new();
     let mut snapshots_iter = snapshots.into_iter();
-    let (mut current_snapshot, mut current_ts) = snapshots_iter.next().unwrap();
+    let (mut current_snapshot, current_ts) = snapshots_iter.next().unwrap();
     let mut min_delta = current_ts;
-    let mut cumulative_tags = get_tags(current_snapshot, count_snapshot, graph);
+    let mut cumulative_tags = get_tags(current_snapshot, current_ts, count_snapshot, graph);
 
     for (next_snapshot, next_ts) in snapshots_iter {
         count_snapshot += 1;
@@ -248,19 +259,19 @@ fn tags_check_origin<G: SwhFullGraph>(
             min_delta = next_ts;
             continue;
         }
-        let next_tags = get_tags(next_snapshot, count_snapshot, graph);
+        let next_tags = get_tags(next_snapshot, next_ts, count_snapshot, graph);
         compute_inconsistencies(
             &mut inconsistencies,
             count_snapshot,
             min_delta,
             &mut cumulative_tags,
-            (current_snapshot, current_ts),// TODO Remove those, only use what's in cumulative tags (delta is not properly computed otherwise)
+            //(current_snapshot, current_ts),// TODO Remove those, only use what's in cumulative tags (delta is not properly computed otherwise)
             next_tags,
             (next_snapshot, next_ts),
             graph,
         );
         current_snapshot = next_snapshot;
-        current_ts = next_ts;
+        //current_ts = next_ts;
         min_delta = next_ts;
     }
     if inconsistencies.is_empty() {
@@ -503,9 +514,11 @@ fn write_batch(
 }
 
 fn snapshots_extraction(suffix: &str) -> Result<HashMap<String, Vec<SnapshotInfo>>> {
-    let orc_dir = match suffix{
+    let orc_dir = match suffix {
         "full_2025-10" => "/swh/scratch/graph/2025-10-08/orc/origin_visit_status/",
-        "teaser_2025-05" => "/swh/scratch/rapaport/datasets/2025-05-28-popular-1k/orc/origin_visit_status/",
+        "teaser_2025-05" => {
+            "/swh/scratch/rapaport/datasets/2025-05-28-popular-1k/orc/origin_visit_status/"
+        }
         _ => {
             return Err(anyhow::anyhow!("unknown dataset suffix"));
         }
