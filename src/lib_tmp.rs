@@ -265,7 +265,7 @@ fn tags_check_origin<G: SwhFullGraph>(
             count_snapshot,
             min_delta,
             &mut cumulative_tags,
-            //(current_snapshot, current_ts),// TODO Remove those, only use what's in cumulative tags (delta is not properly computed otherwise)
+            //(current_snapshot, current_ts),
             next_tags,
             (next_snapshot, next_ts),
             graph,
