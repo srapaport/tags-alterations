@@ -21,13 +21,15 @@ static COUNTER_NOT_SNAPSHOT: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_INSUFFICIENT_SNAPSHOTS: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_INVALID_UTF8_BRANCH_NAME: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_NOT_TAG_BRANCH: AtomicUsize = AtomicUsize::new(0);
-static COUNTER_NOT_RELEASE: AtomicUsize = AtomicUsize::new(0);
+static COUNTER_TAG_LIGHTWEIGHT: AtomicUsize = AtomicUsize::new(0);
+static COUNTER_TAG_ANNOTATED: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_INVALID_REVS_COUNT: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_TAG_ALTERATION: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_TAG_REMOVAL: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_URL_NOT_FOUND: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_URL_NOT_UTF8: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_REV_NO_TIMESTAMP: AtomicUsize = AtomicUsize::new(0);
+static COUNTER_INVALID_SUCCESSOR: AtomicUsize = AtomicUsize::new(0);
 
 pub fn display_counters() {
     println!("{}", format_counters());
@@ -42,11 +44,13 @@ fn format_counters() -> String {
          Origins with insufficient snapshots (<2): {}\n\
          Invalid UTF-8 branch names: {}\n\
          Branches not containing '/tags/': {}\n\
-         Tag successors not releases: {}\n\
+         Lightweight tags: {}\n\
+         Annotated tags: {}\n\
          Releases with invalid revision count (!=1): {}\n\
          Url not found: {}\n\
          Url not utf8: {}\n\
          Revision without timestamps: {}\n\
+         Invalid Snapshots successor: {}\n\
          Tags modified: {}\n\
          Tags deleted: {}\n\
          ======================================\n",
@@ -56,11 +60,13 @@ fn format_counters() -> String {
         COUNTER_INSUFFICIENT_SNAPSHOTS.load(Ordering::Relaxed),
         COUNTER_INVALID_UTF8_BRANCH_NAME.load(Ordering::Relaxed),
         COUNTER_NOT_TAG_BRANCH.load(Ordering::Relaxed),
-        COUNTER_NOT_RELEASE.load(Ordering::Relaxed),
+        COUNTER_TAG_LIGHTWEIGHT.load(Ordering::Relaxed),
+        COUNTER_TAG_ANNOTATED.load(Ordering::Relaxed),
         COUNTER_INVALID_REVS_COUNT.load(Ordering::Relaxed),
         COUNTER_URL_NOT_FOUND.load(Ordering::Relaxed),
         COUNTER_URL_NOT_UTF8.load(Ordering::Relaxed),
         COUNTER_REV_NO_TIMESTAMP.load(Ordering::Relaxed),
+        COUNTER_INVALID_SUCCESSOR.load(Ordering::Relaxed),
         COUNTER_TAG_ALTERATION.load(Ordering::Relaxed),
         COUNTER_TAG_REMOVAL.load(Ordering::Relaxed),
     )
@@ -81,10 +87,17 @@ fn get_tags<G: SwhFullGraph>(
                     continue;
                 };
                 if branch_name.contains("/tags/") {
-                    if graph.properties().node_type(succ) != NodeType::Release {
-                        COUNTER_NOT_RELEASE.fetch_add(1, Ordering::Relaxed);
+                    let succ_type = graph.properties().node_type(succ);
+                    if  succ_type != NodeType::Release {
+                        if succ_type != NodeType::Revision{
+                            COUNTER_INVALID_SUCCESSOR.fetch_add(1, Ordering::Relaxed);
+                            continue;
+                        }
+                        COUNTER_TAG_LIGHTWEIGHT.fetch_add(1, Ordering::Relaxed);
+                        insert_tag(&mut tags, succ, branch_name, graph);
                         continue;
                     }
+                    COUNTER_TAG_ANNOTATED.fetch_add(1, Ordering::Relaxed);
                     let mut revs = graph
                         .successors(succ)
                         .into_iter()
@@ -92,15 +105,7 @@ fn get_tags<G: SwhFullGraph>(
                         .collect::<Vec<_>>();
                     if revs.len() == 1 {
                         let rev = revs.pop().unwrap();
-                        let root_dir = match swh_graph_stdlib::find_root_dir(graph, rev) {
-                            Err(_) => None,
-                            Ok(root_dir) => root_dir,
-                        };
-                        let Some(timestamp) = graph.properties().committer_timestamp(rev) else {
-                            COUNTER_REV_NO_TIMESTAMP.fetch_add(1, Ordering::Relaxed);
-                            continue;
-                        };
-                        tags.insert(branch_name, (rev, timestamp, root_dir));
+                        insert_tag(&mut tags, rev, branch_name, graph);
                     } else {
                         COUNTER_INVALID_REVS_COUNT.fetch_add(1, Ordering::Relaxed);
                     }
@@ -111,6 +116,23 @@ fn get_tags<G: SwhFullGraph>(
         }
     }
     tags
+}
+
+fn insert_tag<G: SwhFullGraph>(
+    tags: &mut HashMap<String, (usize, i64, Option<usize>)>,
+    rev: usize,
+    branch_name: String,
+    graph: &G,
+) {
+    let root_dir = match swh_graph_stdlib::find_root_dir(graph, rev) {
+        Err(_) => None,
+        Ok(root_dir) => root_dir,
+    };
+    let Some(timestamp) = graph.properties().committer_timestamp(rev) else {
+        COUNTER_REV_NO_TIMESTAMP.fetch_add(1, Ordering::Relaxed);
+        return;
+    };
+    tags.insert(branch_name, (rev, timestamp, root_dir));
 }
 
 fn compute_inconsistencies<G: SwhFullGraph>(
