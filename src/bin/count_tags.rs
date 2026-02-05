@@ -190,42 +190,42 @@ fn main() -> Result<()> {
     log_file.write_all(format_counters(total_tags).as_bytes())?;
 
     // Write results to SQLite database
-    let write_pb = ProgressBar::new(total_tags as u64);
-    write_pb.set_style(
-        ProgressStyle::default_bar()
-            .template("{msg} [{bar:40.green/blue}] {pos}/{len} tags ({per_sec}, {eta})")?
-            .progress_chars("#>-"),
-    );
-    write_pb.set_message("Writing to database");
+    // let write_pb = ProgressBar::new(total_tags as u64);
+    // write_pb.set_style(
+    //     ProgressStyle::default_bar()
+    //         .template("{msg} [{bar:40.green/blue}] {pos}/{len} tags ({per_sec}, {eta})")?
+    //         .progress_chars("#>-"),
+    // );
+    // write_pb.set_message("Writing to database");
 
-    let conn = Connection::open("data/tags_count.db")?;
+    // let conn = Connection::open("data/tags_count.db")?;
 
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS tags (
-            origin_url TEXT NOT NULL,
-            tag_name TEXT NOT NULL,
-            type TEXT NOT NULL
-        )",
-        [],
-    )?;
+    // conn.execute(
+    //     "CREATE TABLE IF NOT EXISTS tags (
+    //         origin_url TEXT NOT NULL,
+    //         tag_name TEXT NOT NULL,
+    //         type TEXT NOT NULL
+    //     )",
+    //     [],
+    // )?;
 
-    conn.execute("DELETE FROM tags", [])?;
+    // conn.execute("DELETE FROM tags", [])?;
 
-    let tx = conn.unchecked_transaction()?;
-    {
-        let mut stmt =
-            tx.prepare("INSERT INTO tags (origin_url, tag_name, type) VALUES (?, ?, ?)")?;
+    // let tx = conn.unchecked_transaction()?;
+    // {
+    //     let mut stmt =
+    //         tx.prepare("INSERT INTO tags (origin_url, tag_name, type) VALUES (?, ?, ?)")?;
 
-        for (origin_url, tag_map) in tags {
-            for (tag_name, tag_type) in tag_map {
-                stmt.execute(params![origin_url, tag_name, tag_type])?;
-                write_pb.inc(1);
-            }
-        }
-    }
-    tx.commit()?;
+    //     for (origin_url, tag_map) in tags {
+    //         for (tag_name, tag_type) in tag_map {
+    //             stmt.execute(params![origin_url, tag_name, tag_type])?;
+    //             write_pb.inc(1);
+    //         }
+    //     }
+    // }
+    // tx.commit()?;
 
-    write_pb.finish_with_message("Done writing to data/tags_count.db");
+    // write_pb.finish_with_message("Done writing to data/tags_count.db");
 
     Ok(())
 }
