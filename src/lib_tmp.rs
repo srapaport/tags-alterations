@@ -93,7 +93,7 @@ fn get_tags<G: SwhFullGraph>(
     snap_timestamp: u64,
     count_snapshot: u64,
     graph: &G,
-) -> HashMap<(String, String), (usize, i64, Option<usize>, u64, usize, u64)> {
+) -> HashMap<(String, String), (Option<i64>, usize, i64, Option<usize>, u64, usize, u64)> {
     let mut tags = HashMap::new();
     for (succ, labels) in graph.labeled_successors(snapshot) {
         for label in labels {
@@ -110,6 +110,7 @@ fn get_tags<G: SwhFullGraph>(
                             COUNTER_TAG_LIGHTWEIGHT.fetch_add(1, Ordering::Relaxed);
                             insert_tag(
                                 &mut tags,
+                                None,
                                 succ,
                                 branch_name,
                                 String::from("lightweight"),
@@ -151,8 +152,10 @@ fn get_tags<G: SwhFullGraph>(
                             }
                             if revs.len() == 1 {
                                 let rev = revs.pop().unwrap();
+                                let tag_timestamp = graph.properties().author_timestamp(succ);
                                 insert_tag(
                                     &mut tags,
+                                    tag_timestamp,
                                     rev,
                                     branch_name,
                                     String::from("annotated"),
@@ -179,7 +182,8 @@ fn get_tags<G: SwhFullGraph>(
 }
 
 fn insert_tag<G: SwhFullGraph>(
-    tags: &mut HashMap<(String, String), (usize, i64, Option<usize>, u64, usize, u64)>,
+    tags: &mut HashMap<(String, String), (Option<i64>, usize, i64, Option<usize>, u64, usize, u64)>,
+    tag_timestamp: Option<i64>,
     rev: usize,
     branch_name: String,
     tag_type: String,
@@ -199,6 +203,7 @@ fn insert_tag<G: SwhFullGraph>(
     tags.insert(
         (branch_name, tag_type),
         (
+            tag_timestamp,
             rev,
             timestamp,
             root_dir,
@@ -222,48 +227,48 @@ fn compute_inconsistencies<G: SwhFullGraph>(
     >,
     count_snapshot: u64,
     min_delta: u64,
-    cumulative_tags: &mut HashMap<(String, String), (usize, i64, Option<usize>, u64, usize, u64)>,
+    cumulative_tags: &mut HashMap<(String, String), (Option<i64>, usize, i64, Option<usize>, u64, usize, u64)>,
     //current_snapshot: (usize, u64),
-    next_tags: HashMap<(String, String), (usize, i64, Option<usize>, u64, usize, u64)>,
+    next_tags: HashMap<(String, String), (Option<i64>, usize, i64, Option<usize>, u64, usize, u64)>,
     next_snapshot: (usize, u64),
     graph: &G,
 ) {
     let next_snapshot_swhid = graph.properties().swhid(next_snapshot.0).to_string();
     for (tag_name, current_tag) in cumulative_tags.clone() {
-        let current_snapshot_swhid = graph.properties().swhid(current_tag.4).to_string();
+        let current_snapshot_swhid = graph.properties().swhid(current_tag.5).to_string();
         if let Some(&next_tag) = next_tags.get(&tag_name) {
-            if next_tag.0 == current_tag.0 {
+            if next_tag.1 == current_tag.1 {
                 continue;
             }
-            let current_rev_swhid = graph.properties().swhid(current_tag.0).to_string();
+            let current_rev_swhid = graph.properties().swhid(current_tag.1).to_string();
             let current_root_dir_swhid = current_tag
-                .2
+                .3
                 .map(|root_dir| graph.properties().swhid(root_dir).to_string());
-            let next_rev_swhid = graph.properties().swhid(next_tag.0).to_string();
+            let next_rev_swhid = graph.properties().swhid(next_tag.1).to_string();
             let next_root_dir_swhid = next_tag
-                .2
+                .3
                 .map(|root_dir| graph.properties().swhid(root_dir).to_string());
 
             COUNTER_TAG_ALTERATION.fetch_add(1, Ordering::Relaxed);
             inconsistencies.entry(tag_name.clone()).or_default().push((
-                (current_tag.3, next_tag.3, min_delta),
-                (current_snapshot_swhid.clone(), current_tag.5),
-                (current_rev_swhid, current_tag.1, current_root_dir_swhid),
+                (current_tag.4, next_tag.4, min_delta),
+                (current_snapshot_swhid.clone(), current_tag.6),
+                (current_rev_swhid, current_tag.2, current_root_dir_swhid),
                 (next_snapshot_swhid.clone(), next_snapshot.1),
-                Some((next_rev_swhid, next_tag.1, next_root_dir_swhid)),
+                Some((next_rev_swhid, next_tag.2, next_root_dir_swhid)),
             ));
             cumulative_tags.insert(tag_name.clone(), next_tag);
         } else {
-            let current_rev_swhid = graph.properties().swhid(current_tag.0).to_string();
+            let current_rev_swhid = graph.properties().swhid(current_tag.1).to_string();
             let current_root_dir_swhid = current_tag
-                .2
+                .3
                 .map(|root_dir| graph.properties().swhid(root_dir).to_string());
 
             COUNTER_TAG_REMOVAL.fetch_add(1, Ordering::Relaxed);
             inconsistencies.entry(tag_name.clone()).or_default().push((
-                (current_tag.3, count_snapshot, min_delta),
-                (current_snapshot_swhid.clone(), current_tag.5),
-                (current_rev_swhid, current_tag.1, current_root_dir_swhid),
+                (current_tag.4, count_snapshot, min_delta),
+                (current_snapshot_swhid.clone(), current_tag.6),
+                (current_rev_swhid, current_tag.2, current_root_dir_swhid),
                 (next_snapshot_swhid.clone(), next_snapshot.1),
                 None,
             ));

@@ -3627,6 +3627,7 @@ dependencies = [
  "csv",
  "dotenv",
  "indicatif",
+ "num-format",
  "orc-rust",
  "rayon",
  "rocksdb",
