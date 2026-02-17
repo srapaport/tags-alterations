@@ -34,7 +34,7 @@ static COUNTER_INVALID_SUCCESSOR: AtomicUsize = AtomicUsize::new(0);
 
 fn format_counters_bis() -> String {
     format!(
-        "\n=== Defensive Programming Counters ===\n\
+        "\n=== Programming Counters Bis ===\n\
          Partial visits: {}\n\
          Visit type not `git`: {}\n\
          ======================================\n",
@@ -59,7 +59,7 @@ pub fn display_counters() {
 
 fn format_counters() -> String {
     format!(
-        "\n=== Defensive Programming Counters ===\n\
+        "\n=== Programming Counters ===\n\
          Snapshots not found in graph: {}\n\
          Origins with insufficient snapshots (<2): {}\n\
          Invalid UTF-8 branch names: {}\n\
@@ -93,7 +93,7 @@ fn get_tags<G: SwhFullGraph>(
     snap_timestamp: u64,
     count_snapshot: u64,
     graph: &G,
-) -> HashMap<String, (usize, i64, Option<usize>, u64, usize, u64)> {
+) -> HashMap<(String, String), (usize, i64, Option<usize>, u64, usize, u64)> {
     let mut tags = HashMap::new();
     for (succ, labels) in graph.labeled_successors(snapshot) {
         for label in labels {
@@ -112,6 +112,7 @@ fn get_tags<G: SwhFullGraph>(
                                 &mut tags,
                                 succ,
                                 branch_name,
+                                String::from("lightweight"),
                                 count_snapshot,
                                 snapshot,
                                 snap_timestamp,
@@ -120,19 +121,41 @@ fn get_tags<G: SwhFullGraph>(
                         }
                         NodeType::Release => {
                             COUNTER_TAG_ANNOTATED.fetch_add(1, Ordering::Relaxed);
-                            let mut revs = graph
-                                .successors(succ)
-                                .into_iter()
+                            let successors = graph.successors(succ).into_iter().collect::<Vec<_>>();
+                            let mut revs = successors
+                                .iter()
+                                .copied()
                                 .filter(|node| {
                                     graph.properties().node_type(*node) == NodeType::Revision
                                 })
                                 .collect::<Vec<_>>();
+                            if revs.is_empty() {
+                                let releases: Vec<_> = successors
+                                    .iter()
+                                    .copied()
+                                    .filter(|node| {
+                                        graph.properties().node_type(*node) == NodeType::Release
+                                    })
+                                    .collect();
+
+                                if releases.len() == 1 {
+                                    revs = graph
+                                        .successors(releases[0])
+                                        .into_iter()
+                                        .filter(|node| {
+                                            graph.properties().node_type(*node)
+                                                == NodeType::Revision
+                                        })
+                                        .collect();
+                                }
+                            }
                             if revs.len() == 1 {
                                 let rev = revs.pop().unwrap();
                                 insert_tag(
                                     &mut tags,
                                     rev,
                                     branch_name,
+                                    String::from("annotated"),
                                     count_snapshot,
                                     snapshot,
                                     snap_timestamp,
@@ -156,9 +179,10 @@ fn get_tags<G: SwhFullGraph>(
 }
 
 fn insert_tag<G: SwhFullGraph>(
-    tags: &mut HashMap<String, (usize, i64, Option<usize>, u64, usize, u64)>,
+    tags: &mut HashMap<(String, String), (usize, i64, Option<usize>, u64, usize, u64)>,
     rev: usize,
     branch_name: String,
+    tag_type: String,
     count_snapshot: u64,
     snapshot: usize,
     snap_timestamp: u64,
@@ -173,7 +197,7 @@ fn insert_tag<G: SwhFullGraph>(
         return;
     };
     tags.insert(
-        branch_name,
+        (branch_name, tag_type),
         (
             rev,
             timestamp,
@@ -187,7 +211,7 @@ fn insert_tag<G: SwhFullGraph>(
 
 fn compute_inconsistencies<G: SwhFullGraph>(
     inconsistencies: &mut HashMap<
-        String,
+        (String, String),
         Vec<(
             (u64, u64, u64),
             (String, u64),
@@ -198,9 +222,9 @@ fn compute_inconsistencies<G: SwhFullGraph>(
     >,
     count_snapshot: u64,
     min_delta: u64,
-    cumulative_tags: &mut HashMap<String, (usize, i64, Option<usize>, u64, usize, u64)>,
+    cumulative_tags: &mut HashMap<(String, String), (usize, i64, Option<usize>, u64, usize, u64)>,
     //current_snapshot: (usize, u64),
-    next_tags: HashMap<String, (usize, i64, Option<usize>, u64, usize, u64)>,
+    next_tags: HashMap<(String, String), (usize, i64, Option<usize>, u64, usize, u64)>,
     next_snapshot: (usize, u64),
     graph: &G,
 ) {
@@ -259,7 +283,7 @@ fn tags_check_origin<G: SwhFullGraph>(
     graph: &G,
 ) -> Option<
     HashMap<
-        String,
+        (String, String),
         Vec<(
             (u64, u64, u64),
             (String, u64),
@@ -364,6 +388,7 @@ pub fn tags_check_full<G: SwhFullGraph + Sync>(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 origin_url TEXT NOT NULL,
                 tag_name TEXT NOT NULL,
+                type TEXT NOT NULL,
                 old_snapshot TEXT NOT NULL,
                 old_snapshot_cpt INTEGER NOT NULL,
                 old_snap_timestamp INTEGER NOT NULL,
@@ -508,7 +533,7 @@ fn write_batch(
     batch: &[(
         String,
         HashMap<
-            String,
+            (String, String),
             Vec<(
                 (u64, u64, u64),
                 (String, u64),
@@ -520,8 +545,8 @@ fn write_batch(
     )],
 ) -> Result<()> {
     let mut stmt = conn.prepare_cached(
-        "INSERT INTO tag_inconsistencies (origin_url, tag_name, old_snapshot, old_snapshot_cpt, old_snap_timestamp, old_revision, old_rev_timestamp, old_root_dir, new_snapshot, new_snapshot_cpt, new_snap_timestamp, new_revision, new_rev_timestamp, new_root_dir, min_delta) 
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+        "INSERT INTO tag_inconsistencies (origin_url, tag_name, type, old_snapshot, old_snapshot_cpt, old_snap_timestamp, old_revision, old_rev_timestamp, old_root_dir, new_snapshot, new_snapshot_cpt, new_snap_timestamp, new_revision, new_rev_timestamp, new_root_dir, min_delta) 
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
     )?;
 
     let tx = conn.unchecked_transaction()?;
@@ -534,7 +559,8 @@ fn write_batch(
                 };
                 stmt.execute(params![
                     origin,
-                    tag_name,
+                    tag_name.0,
+                    tag_name.1,
                     old_snapshot.0,
                     min_delta.0,
                     old_snapshot.1,
@@ -560,9 +586,10 @@ fn write_batch(
 fn snapshots_extraction(suffix: &str) -> Result<HashMap<String, Vec<SnapshotInfo>>> {
     let orc_dir = match suffix {
         "full_2025-10" => "/swh/scratch/graph/2025-10-08/orc/origin_visit_status/",
+        "full_2025-10_v2" => "/swh/scratch/graph/2025-10-08/orc/origin_visit_status/",
         "teaser_2025-05" => {
             "/swh/scratch/rapaport/datasets/2025-05-28-popular-1k/orc/origin_visit_status/"
-        }
+        },
         _ => {
             return Err(anyhow::anyhow!("unknown dataset suffix"));
         }

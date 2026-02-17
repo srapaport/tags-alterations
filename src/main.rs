@@ -16,6 +16,7 @@ fn main() -> Result<()> {
         .load_forward_labels()?
         .load_backward_labels()?;
     //tags_alterations::tags_check_full(&graph, amount_origins, "full_2025-10")?;
-    lib_tmp::tags_check_full(&graph, "full_2025-10")?;
+    lib_tmp::tags_check_full(&graph, "full_2025-10_v2")?;
+    //lib_tmp::tags_check_full(&graph, "teaser_2025-05")?;
     Ok(())
 }
