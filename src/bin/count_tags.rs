@@ -2,7 +2,6 @@ use anyhow::{Result, anyhow};
 use dotenv::dotenv;
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use rusqlite::{Connection, params};
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
