@@ -19,9 +19,19 @@ struct Classified {
     diff_dir: Option<DiffDirectory>,
 }
 
-struct DiffRelease {}
+struct DiffRelease {
+    message_differs: bool,
+    author_differs: bool,
+    author_timestamp_differs: bool,
+}
 
-struct DiffRevision {}
+struct DiffRevision {
+    message_differs: bool,
+    author_differs: bool,
+    committer_differs: bool,
+    author_timestamp_differs: bool,
+    committer_timestamp_differs: bool,
+}
 
 struct DiffDirectory {
     added: usize,
@@ -69,17 +79,29 @@ static RELS: AtomicUsize = AtomicUsize::new(0);
 static DIR_NODE_ID_ERR: AtomicUsize = AtomicUsize::new(0);
 static DIR_NAME_UTF8_ERR: AtomicUsize = AtomicUsize::new(0);
 static TREE_DIFF_ERR: AtomicUsize = AtomicUsize::new(0);
+static REV_NODE_ID_ERR: AtomicUsize = AtomicUsize::new(0);
+static ANNOTATED_WITHOUT_REL: AtomicUsize = AtomicUsize::new(0);
+static REL_MESSAGE_ERR: AtomicUsize = AtomicUsize::new(0);
+static REL_AUTHOR_ERR: AtomicUsize = AtomicUsize::new(0);
+static REL_AUTHOR_TIMESTAMP_ERR: AtomicUsize = AtomicUsize::new(0);
 
 fn main() -> Result<()> {
     println!("Loading graph...");
-    let graph = SwhBidirectionalGraph::new("/dev/shm/swh-graph/current/graph")?
-        .load_all_properties::<DynMphf>()?
-        .load_forward_labels()?
-        .load_backward_labels()?;
-
+    // let graph = SwhBidirectionalGraph::new("/dev/shm/swh-graph/current/graph")?
+    //     .load_all_properties::<DynMphf>()?
+    //     .load_forward_labels()?
+    //     .load_backward_labels()?;
+    let graph = SwhBidirectionalGraph::new(
+        "/swh/scratch/rapaport/datasets/2025-05-28-popular-1k/compressed/graph",
+    )?
+    .load_all_properties::<DynMphf>()?
+    .load_forward_labels()?
+    .load_backward_labels()?;
+    let conn = Connection::open(format!("data/tags_alterations_teaser_2025-05.db"))?;
+    
     let start = Instant::now();
     println!("Querying database...");
-    let conn = Connection::open(format!("data/tags_alterations_full_2025-10_v2.db"))?;
+    // let conn = Connection::open(format!("data/tags_alterations_full_2025-10_v2.db"))?;
     let table_exists = conn
         .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='tag_inconsistencies'")
         .and_then(|mut stmt| stmt.exists([]))
@@ -179,15 +201,15 @@ fn main() -> Result<()> {
         .into_par_iter()
         .filter_map(|row| {
             pb.inc(1);
-            // let Some(type_out) = get_type(&row) else {
-            //     NO_TYPES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            //     return None;
-            // };
+            let Some(type_out) = get_type(&row) else {
+                NO_TYPES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                return None;
+            };
             let Some(node_types) = get_node_types(&row, &graph) else {
                 NO_RELS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 return None;
             };
-            Some(compute_diffs(row, node_types, &graph))
+            Some(compute_diffs(row, type_out, node_types, &graph))
         })
         .collect();
 
@@ -198,7 +220,12 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn compute_diffs<G: SwhFullGraph>(ta: TagAlteration, releases: Releases, graph: &G) -> Classified {
+fn compute_diffs<G: SwhFullGraph>(
+    ta: TagAlteration,
+    type_out: String,
+    releases: Releases,
+    graph: &G,
+) -> Classified {
     let mut diffs = Classified {
         diff_rel: None,
         diff_rev: None,
@@ -233,9 +260,18 @@ fn compute_diffs<G: SwhFullGraph>(ta: TagAlteration, releases: Releases, graph: 
         todo!("count");
     }
 
-    if releases.rel_in.is_some() || releases.rel_out.is_some() {
-        if releases.rel_in != releases.rel_out {
-            compute_diff_rel(releases.rel_in, releases.rel_out, &mut diffs, graph);
+    if ta.type_ == "annotated" && ta.type_ == type_out {
+        if releases.rel_in.is_some() && releases.rel_out.is_some() {
+            if releases.rel_in.unwrap() != releases.rel_out.unwrap() {
+                compute_diff_rel(
+                    releases.rel_in.unwrap(),
+                    releases.rel_out.unwrap(),
+                    &mut diffs,
+                    graph,
+                );
+            }
+        } else {
+            ANNOTATED_WITHOUT_REL.fetch_add(1, Ordering::Relaxed);
         }
     }
 
@@ -248,6 +284,99 @@ fn compute_diff_rev<G: SwhFullGraph>(
     diffs: &mut Classified,
     graph: &G,
 ) {
+    let old_rev_node = match graph.properties().node_id(old_rev) {
+        Ok(node) => node,
+        Err(_) => {
+            REV_NODE_ID_ERR.fetch_add(1, Ordering::Relaxed);
+            return;
+        }
+    };
+
+    let new_rev_node = match graph.properties().node_id(new_rev) {
+        Ok(node) => node,
+        Err(_) => {
+            REV_NODE_ID_ERR.fetch_add(1, Ordering::Relaxed);
+            return;
+        }
+    };
+
+    let message_differs = compare_messages(old_rev_node, new_rev_node, graph);
+    let author_differs = compare_authors(old_rev_node, new_rev_node, graph);
+    let committer_differs = compare_committers(old_rev_node, new_rev_node, graph);
+    let author_timestamp_differs = compare_author_timestamps(old_rev_node, new_rev_node, graph);
+    let committer_timestamp_differs =
+        compare_committer_timestamps(old_rev_node, new_rev_node, graph);
+
+    diffs.diff_rev = Some(DiffRevision {
+        message_differs,
+        author_differs,
+        committer_differs,
+        author_timestamp_differs,
+        committer_timestamp_differs,
+    });
+}
+
+fn compare_messages<G: SwhFullGraph>(old_rev: usize, new_rev: usize, graph: &G) -> bool {
+    let old_msg = graph.properties().message(old_rev);
+    let new_msg = graph.properties().message(new_rev);
+
+    match (old_msg, new_msg) {
+        (Some(msg1), Some(msg2)) => {
+            let msg1_str = String::from_utf8_lossy(&msg1);
+            let msg2_str = String::from_utf8_lossy(&msg2);
+            msg1_str != msg2_str
+        }
+        (Some(_), None) | (None, Some(_)) => true,
+        (None, None) => false,
+    }
+}
+
+fn compare_authors<G: SwhFullGraph>(old_rev: usize, new_rev: usize, graph: &G) -> bool {
+    let old_author = graph.properties().author_id(old_rev);
+    let new_author = graph.properties().author_id(new_rev);
+
+    match (old_author, new_author) {
+        (Some(a1), Some(a2)) => a1 != a2,
+        (Some(_), None) | (None, Some(_)) => true,
+        (None, None) => false,
+    }
+}
+
+fn compare_committers<G: SwhFullGraph>(old_rev: usize, new_rev: usize, graph: &G) -> bool {
+    let old_committer = graph.properties().committer_id(old_rev);
+    let new_committer = graph.properties().committer_id(new_rev);
+
+    match (old_committer, new_committer) {
+        (Some(c1), Some(c2)) => c1 != c2,
+        (Some(_), None) | (None, Some(_)) => true,
+        (None, None) => false,
+    }
+}
+
+fn compare_author_timestamps<G: SwhFullGraph>(old_rev: usize, new_rev: usize, graph: &G) -> bool {
+    let old_ts = graph.properties().author_timestamp(old_rev);
+    let new_ts = graph.properties().author_timestamp(new_rev);
+
+    match (old_ts, new_ts) {
+        (Some(t1), Some(t2)) => t1 != t2,
+        (Some(_), None) | (None, Some(_)) => true,
+        (None, None) => false,
+    }
+}
+
+fn compare_committer_timestamps<G: SwhFullGraph>(
+    old_rev: usize,
+    new_rev: usize,
+    graph: &G,
+) -> bool {
+    let old_ts = graph.properties().committer_timestamp(old_rev);
+    let new_ts = graph.properties().committer_timestamp(new_rev);
+
+    match (old_ts, new_ts) {
+        (Some(t1), Some(t2)) => t1 != t2,
+        (Some(_), None) | (None, Some(_)) => true,
+        (None, None) => false,
+    }
 }
 
 fn compute_diff_dir<G: SwhFullGraph>(
@@ -353,11 +482,79 @@ fn path_to_string<G: SwhFullGraph>(path: &[swh_graph::labels::LabelNameId], grap
 }
 
 fn compute_diff_rel<G: SwhFullGraph>(
-    rel_in: Option<usize>,
-    rel_out: Option<usize>,
+    rel_in: usize,
+    rel_out: usize,
     diffs: &mut Classified,
     graph: &G,
 ) {
+    let message_differs = compare_release_messages(rel_in, rel_out, graph);
+    let author_differs = compare_release_authors(rel_in, rel_out, graph);
+    let author_timestamp_differs = compare_release_author_timestamps(rel_in, rel_out, graph);
+
+    diffs.diff_rel = Some(DiffRelease {
+        message_differs,
+        author_differs,
+        author_timestamp_differs,
+    });
+}
+
+fn compare_release_messages<G: SwhFullGraph>(rel_in: usize, rel_out: usize, graph: &G) -> bool {
+    let old_msg = graph.properties().message(rel_in);
+    let new_msg = graph.properties().message(rel_out);
+
+    match (old_msg, new_msg) {
+        (Some(msg1), Some(msg2)) => {
+            let msg1_str = String::from_utf8_lossy(&msg1);
+            let msg2_str = String::from_utf8_lossy(&msg2);
+            msg1_str != msg2_str
+        }
+        (Some(_), None) | (None, Some(_)) => {
+            REL_MESSAGE_ERR.fetch_add(1, Ordering::Relaxed);
+            true
+        }
+        (None, None) => {
+            REL_MESSAGE_ERR.fetch_add(1, Ordering::Relaxed);
+            false
+        }
+    }
+}
+
+fn compare_release_authors<G: SwhFullGraph>(rel_in: usize, rel_out: usize, graph: &G) -> bool {
+    let old_author = graph.properties().author_id(rel_in);
+    let new_author = graph.properties().author_id(rel_out);
+
+    match (old_author, new_author) {
+        (Some(a1), Some(a2)) => a1 != a2,
+        (Some(_), None) | (None, Some(_)) => {
+            REL_AUTHOR_ERR.fetch_add(1, Ordering::Relaxed);
+            true
+        }
+        (None, None) => {
+            REL_AUTHOR_ERR.fetch_add(1, Ordering::Relaxed);
+            false
+        }
+    }
+}
+
+fn compare_release_author_timestamps<G: SwhFullGraph>(
+    rel_in: usize,
+    rel_out: usize,
+    graph: &G,
+) -> bool {
+    let old_ts = graph.properties().author_timestamp(rel_in);
+    let new_ts = graph.properties().author_timestamp(rel_out);
+
+    match (old_ts, new_ts) {
+        (Some(t1), Some(t2)) => t1 != t2,
+        (Some(_), None) | (None, Some(_)) => {
+            REL_AUTHOR_TIMESTAMP_ERR.fetch_add(1, Ordering::Relaxed);
+            true
+        }
+        (None, None) => {
+            REL_AUTHOR_TIMESTAMP_ERR.fetch_add(1, Ordering::Relaxed);
+            false
+        }
+    }
 }
 
 fn get_type(ta: &TagAlteration) -> Option<String> {
@@ -465,6 +662,10 @@ fn format_counters() -> String {
     let rels = RELS.load(Ordering::Relaxed);
     let dir_node_id_err = DIR_NODE_ID_ERR.load(Ordering::Relaxed);
     let dir_name_utf8_err = DIR_NAME_UTF8_ERR.load(Ordering::Relaxed);
+    let rev_node_id_err = REV_NODE_ID_ERR.load(Ordering::Relaxed);
+    let rel_message_err = REL_MESSAGE_ERR.load(Ordering::Relaxed);
+    let rel_author_err = REL_AUTHOR_ERR.load(Ordering::Relaxed);
+    let rel_author_timestamp_err = REL_AUTHOR_TIMESTAMP_ERR.load(Ordering::Relaxed);
 
     format!(
         "Classification Results:\n\
@@ -475,14 +676,28 @@ fn format_counters() -> String {
          No releases: {}\n\
          Directory node ID errors: {}\n\
          Directory name UTF-8 errors: {}\n\
-         Tree diff errs: {}\n",
+         Tree diff errs: {}\n\
+         Revision node ID errors: {}\n\
+         Annotated that aren't releases: {}\n\
+         Release message errors: {}\n\
+         Release author errors: {}\n\
+         Release author timestamp errors: {}\n",
         types.to_formatted_string(&*FORMAT),
         no_types.to_formatted_string(&*FORMAT),
         rels.to_formatted_string(&*FORMAT),
         no_rels.to_formatted_string(&*FORMAT),
         dir_node_id_err.to_formatted_string(&*FORMAT),
         dir_name_utf8_err.to_formatted_string(&*FORMAT),
-        TREE_DIFF_ERR.load(Ordering::Relaxed).to_formatted_string(&*FORMAT),
+        TREE_DIFF_ERR
+            .load(Ordering::Relaxed)
+            .to_formatted_string(&*FORMAT),
+        rev_node_id_err.to_formatted_string(&*FORMAT),
+        ANNOTATED_WITHOUT_REL
+            .load(Ordering::Relaxed)
+            .to_formatted_string(&*FORMAT),
+        rel_message_err.to_formatted_string(&*FORMAT),
+        rel_author_err.to_formatted_string(&*FORMAT),
+        rel_author_timestamp_err.to_formatted_string(&*FORMAT),
     )
 }
 
