@@ -425,13 +425,19 @@ fn spot_deletion_creation<G: SwhFullGraph>(
 }
 
 pub fn main() -> Result<()> {
-    let graph = SwhBidirectionalGraph::new("/dev/shm/swh-graph/current/graph")?
+    // let graph = SwhBidirectionalGraph::new("/dev/shm/swh-graph/current/graph")?
+    //     .load_all_properties::<DynMphf>()?
+    //     .load_forward_labels()?
+    //     .load_backward_labels()?;
+    // let conn = Connection::open(format!("data/tags_alterations_full_2025-10_v2.db"))?;
+        let graph = SwhBidirectionalGraph::new("/swh/scratch/rapaport/datasets/2025-05-28-popular-1k/compressed/graph")?
         .load_all_properties::<DynMphf>()?
         .load_forward_labels()?
         .load_backward_labels()?;
-    let conn = Connection::open(format!("data/tags_alterations_full_2025-10_v2.db"))?;
+    let conn = Connection::open(format!("data/tags_alterations_teaser_2025-05.db"))?;
 
-    let snapshots = tags_alterations::lib_tmp::snapshots_extraction("full_2025-10_v2")?;
+    // let snapshots = tags_alterations::lib_tmp::snapshots_extraction("full_2025-10_v2")?;
+    let snapshots = tags_alterations::lib_tmp::snapshots_extraction("teaser_2025-05")?;
 
     deletion_creation(&graph, &conn, snapshots)?;
 
