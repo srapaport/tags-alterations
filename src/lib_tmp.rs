@@ -46,11 +46,11 @@ fn format_counters_bis() -> String {
 fn display_counters_bis() {
     println!("{}", format_counters_bis());
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct SnapshotInfo {
-    date_seconds: i64,
-    status: String,
-    snapshot: Option<String>,
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct SnapshotInfo {
+    pub date_seconds: i64,
+    pub status: String,
+    pub snapshot: Option<String>,
 }
 
 pub fn display_counters() {
@@ -588,7 +588,7 @@ fn write_batch(
     Ok(())
 }
 
-fn snapshots_extraction(suffix: &str) -> Result<HashMap<String, Vec<SnapshotInfo>>> {
+pub fn snapshots_extraction(suffix: &str) -> Result<HashMap<String, Vec<SnapshotInfo>>> {
     let orc_dir = match suffix {
         "full_2025-10" => "/swh/scratch/graph/2025-10-08/orc/origin_visit_status/",
         "full_2025-10_v2" => "/swh/scratch/graph/2025-10-08/orc/origin_visit_status/",
