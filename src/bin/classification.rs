@@ -17,6 +17,12 @@ struct Classified {
     diff_rel: Option<DiffRelease>,
     diff_rev: Option<DiffRevision>,
     diff_dir: Option<DiffDirectory>,
+    old_release_swhid: Option<String>,
+    new_release_swhid: Option<String>,
+    old_revision_swhid: Option<String>,
+    new_revision_swhid: Option<String>,
+    old_directory_swhid: Option<String>,
+    new_directory_swhid: Option<String>,
 }
 
 struct DiffRelease {
@@ -58,6 +64,7 @@ struct TagAlteration {
     category: String,
     status: Option<String>,
     creation_type: Option<String>,
+    creation_snapshot: Option<String>,
     new_revision: Option<String>,
     new_root_dir: Option<String>,
     creation_rev: Option<String>,
@@ -87,21 +94,21 @@ static REL_AUTHOR_TIMESTAMP_ERR: AtomicUsize = AtomicUsize::new(0);
 
 fn main() -> Result<()> {
     println!("Loading graph...");
-    // let graph = SwhBidirectionalGraph::new("/dev/shm/swh-graph/current/graph")?
-    //     .load_all_properties::<DynMphf>()?
-    //     .load_forward_labels()?
-    //     .load_backward_labels()?;
-    let graph = SwhBidirectionalGraph::new(
-        "/swh/scratch/rapaport/datasets/2025-05-28-popular-1k/compressed/graph",
-    )?
-    .load_all_properties::<DynMphf>()?
-    .load_forward_labels()?
-    .load_backward_labels()?;
-    let conn = Connection::open(format!("data/tags_alterations_teaser_2025-05.db"))?;
-    
+    let graph = SwhBidirectionalGraph::new("/dev/shm/swh-graph/current/graph")?
+        .load_all_properties::<DynMphf>()?
+        .load_forward_labels()?
+        .load_backward_labels()?;
+    // let graph = SwhBidirectionalGraph::new(
+    //     "/swh/scratch/rapaport/datasets/2025-05-28-popular-1k/compressed/graph",
+    // )?
+    // .load_all_properties::<DynMphf>()?
+    // .load_forward_labels()?
+    // .load_backward_labels()?;
+    // let mut conn = Connection::open(format!("data/tags_alterations_teaser_2025-05.db"))?;
+
     let start = Instant::now();
     println!("Querying database...");
-    // let conn = Connection::open(format!("data/tags_alterations_full_2025-10_v2.db"))?;
+    let mut conn = Connection::open(format!("data/tags_alterations_full_2025-10_v2.db"))?;
     let table_exists = conn
         .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='tag_inconsistencies'")
         .and_then(|mut stmt| stmt.exists([]))
@@ -137,6 +144,7 @@ fn main() -> Result<()> {
                 WHEN dc.creation_delta IS NOT NULL THEN 'legit'
                 ELSE NULL
             END AS status,
+            dc.creation_snapshot,
             ti.new_revision,
             ti.new_root_dir,
             dc.creation_rev,
@@ -166,14 +174,17 @@ fn main() -> Result<()> {
                 creation_type: row.get(9)?,
                 category: row.get(10)?,
                 status: row.get(11)?,
-                new_revision: row.get(12)?,
-                new_root_dir: row.get(13)?,
-                creation_rev: row.get(14)?,
-                creation_root_dir: row.get(15)?,
+                creation_snapshot: row.get(12)?,
+                new_revision: row.get(13)?,
+                new_root_dir: row.get(14)?,
+                creation_rev: row.get(15)?,
+                creation_root_dir: row.get(16)?,
             })
         })?
         .filter_map(|r| r.ok())
         .collect();
+
+    drop(stmt); // Release the borrow on conn
 
     println!("Done retrieving in: {:?}", start.elapsed());
 
@@ -197,7 +208,7 @@ fn main() -> Result<()> {
             .unwrap()
             .progress_chars("██░"),
     );
-    let diffs: Vec<Classified> = rows
+    let results: Vec<(TagAlteration, Classified)> = rows
         .into_par_iter()
         .filter_map(|row| {
             pb.inc(1);
@@ -209,19 +220,26 @@ fn main() -> Result<()> {
                 NO_RELS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 return None;
             };
-            Some(compute_diffs(row, type_out, node_types, &graph))
+            let diffs = compute_diffs(&row, type_out, node_types, &graph);
+            Some((row, diffs))
         })
         .collect();
 
+    pb.finish();
     println!("Done Classifying: {:?}", start.elapsed());
 
     display_counters();
+
+    println!("\nWriting results to database...");
+    let write_start = Instant::now();
+    write_diffs_to_db(&mut conn, &results)?;
+    println!("Done writing to database: {:?}", write_start.elapsed());
 
     Ok(())
 }
 
 fn compute_diffs<G: SwhFullGraph>(
-    ta: TagAlteration,
+    ta: &TagAlteration,
     type_out: String,
     releases: Releases,
     graph: &G,
@@ -230,14 +248,24 @@ fn compute_diffs<G: SwhFullGraph>(
         diff_rel: None,
         diff_rev: None,
         diff_dir: None,
+        old_release_swhid: releases
+            .rel_in
+            .map(|id| graph.properties().swhid(id).to_string()),
+        new_release_swhid: releases
+            .rel_out
+            .map(|id| graph.properties().swhid(id).to_string()),
+        old_revision_swhid: ta.old_revision.clone(),
+        new_revision_swhid: ta.new_revision.clone().or(ta.creation_rev.clone()),
+        old_directory_swhid: ta.old_root_dir.clone(),
+        new_directory_swhid: ta.new_root_dir.clone().or(ta.creation_root_dir.clone()),
     };
 
-    if let Some(old_dir) = ta.old_root_dir {
-        if let Some(new_dir) = ta.new_root_dir {
+    if let Some(old_dir) = ta.old_root_dir.as_ref() {
+        if let Some(new_dir) = ta.new_root_dir.as_ref() {
             if old_dir != new_dir {
                 compute_diff_dir(&old_dir, &new_dir, &mut diffs, graph);
             }
-        } else if let Some(new_dir) = ta.creation_root_dir {
+        } else if let Some(new_dir) = ta.creation_root_dir.as_ref() {
             if old_dir != new_dir {
                 compute_diff_dir(&old_dir, &new_dir, &mut diffs, graph);
             }
@@ -246,12 +274,12 @@ fn compute_diffs<G: SwhFullGraph>(
         todo!("count");
     }
 
-    if let Some(old_rev) = ta.old_revision {
-        if let Some(new_rev) = ta.new_revision {
+    if let Some(old_rev) = ta.old_revision.as_ref() {
+        if let Some(new_rev) = ta.new_revision.as_ref() {
             if old_rev != new_rev {
                 compute_diff_rev(&old_rev, &new_rev, &mut diffs, graph);
             }
-        } else if let Some(new_rev) = ta.creation_rev {
+        } else if let Some(new_rev) = ta.creation_rev.as_ref() {
             if old_rev != new_rev {
                 compute_diff_rev(&old_rev, &new_rev, &mut diffs, graph);
             }
@@ -450,9 +478,11 @@ fn compute_diff_dir<G: SwhFullGraph>(
             // Same content, different path = rename
             renamed_count += 1;
             final_added.remove(&added_path);
-            // Remove one instance of this hash from deleted
+            // Remove one instance of this hash from deleted and add to modified
             if let Some(path_to_remove) = deleted_paths.iter().next() {
                 deleted_files.remove(path_to_remove);
+                // Add the old path (before rename) to modified_files
+                modified_files.push(path_to_remove.clone());
             }
         }
     }
@@ -703,4 +733,202 @@ fn format_counters() -> String {
 
 fn display_counters() {
     println!("\n{}", format_counters());
+}
+
+fn write_diffs_to_db(conn: &mut Connection, results: &[(TagAlteration, Classified)]) -> Result<()> {
+    conn.execute("DROP TABLE IF EXISTS tag_diffs", [])?;
+    conn.execute(
+        "CREATE TABLE tag_diffs (
+            origin_url TEXT NOT NULL,
+            tag_name TEXT NOT NULL,
+            tag_type TEXT NOT NULL,
+            old_snapshot TEXT NOT NULL,
+            altering_snapshot TEXT NOT NULL,
+            old_snap_timestamp INTEGER NOT NULL,
+            old_release_swhid TEXT,
+            new_release_swhid TEXT,
+            old_revision_swhid TEXT,
+            new_revision_swhid TEXT,
+            old_directory_swhid TEXT,
+            new_directory_swhid TEXT,
+            rel_message_differs INTEGER,
+            rel_author_differs INTEGER,
+            rel_author_timestamp_differs INTEGER,
+            rev_message_differs INTEGER,
+            rev_author_differs INTEGER,
+            rev_committer_differs INTEGER,
+            rev_author_timestamp_differs INTEGER,
+            rev_committer_timestamp_differs INTEGER,
+            dir_added INTEGER,
+            dir_deleted INTEGER,
+            dir_modified INTEGER,
+            dir_renamed INTEGER,
+            PRIMARY KEY (origin_url, tag_name, tag_type, old_snapshot, old_snap_timestamp)
+        )",
+        [],
+    )?;
+
+    conn.execute("DROP TABLE IF EXISTS tag_file_diffs", [])?;
+    conn.execute(
+        "CREATE TABLE tag_file_diffs (
+            origin_url TEXT NOT NULL,
+            tag_name TEXT NOT NULL,
+            tag_type TEXT NOT NULL,
+            old_snapshot TEXT NOT NULL,
+            old_snap_timestamp INTEGER NOT NULL,
+            altering_snapshot TEXT NOT NULL,
+            new_snap_timestamp INTEGER NOT NULL,
+            old_directory_swhid TEXT,
+            new_directory_swhid TEXT,
+            file_path TEXT NOT NULL,
+            change_type TEXT NOT NULL
+        )",
+        [],
+    )?;
+
+    // Use a transaction for much faster batch inserts
+    let tx = conn.transaction()?;
+
+    let mut stmt_diffs = tx.prepare(
+        "INSERT OR REPLACE INTO tag_diffs (
+            origin_url, tag_name, tag_type, old_snapshot, altering_snapshot, old_snap_timestamp,
+            old_release_swhid, new_release_swhid, old_revision_swhid, new_revision_swhid,
+            old_directory_swhid, new_directory_swhid,
+            rel_message_differs, rel_author_differs, rel_author_timestamp_differs,
+            rev_message_differs, rev_author_differs, rev_committer_differs,
+            rev_author_timestamp_differs, rev_committer_timestamp_differs,
+            dir_added, dir_deleted, dir_modified, dir_renamed
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)",
+    )?;
+
+    let mut stmt_files = tx.prepare(
+        "INSERT INTO tag_file_diffs (origin_url, tag_name, tag_type, old_snapshot, old_snap_timestamp, altering_snapshot, new_snap_timestamp, old_directory_swhid, new_directory_swhid, file_path, change_type)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+    )?;
+
+    let pb = ProgressBar::new(results.len() as u64);
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} {percent} ({eta})")
+            .unwrap()
+            .progress_chars("██░"),
+    );
+
+    for (ta, classified) in results {
+        // Use new_snapshot if Move, creation_snapshot if legit deletion
+        let snapshot_to_use = if ta.category == "Move" {
+            &ta.new_snapshot
+        } else {
+            ta.creation_snapshot.as_ref().unwrap_or(&ta.new_snapshot)
+        };
+
+        stmt_diffs.execute(rusqlite::params![
+            &ta.origin_url,
+            &ta.tag_name,
+            &ta.type_,
+            &ta.old_snapshot,
+            snapshot_to_use,
+            ta.old_snap_timestamp,
+            &classified.old_release_swhid,
+            &classified.new_release_swhid,
+            &classified.old_revision_swhid,
+            &classified.new_revision_swhid,
+            &classified.old_directory_swhid,
+            &classified.new_directory_swhid,
+            classified
+                .diff_rel
+                .as_ref()
+                .map(|d| d.message_differs as i32),
+            classified
+                .diff_rel
+                .as_ref()
+                .map(|d| d.author_differs as i32),
+            classified
+                .diff_rel
+                .as_ref()
+                .map(|d| d.author_timestamp_differs as i32),
+            classified
+                .diff_rev
+                .as_ref()
+                .map(|d| d.message_differs as i32),
+            classified
+                .diff_rev
+                .as_ref()
+                .map(|d| d.author_differs as i32),
+            classified
+                .diff_rev
+                .as_ref()
+                .map(|d| d.committer_differs as i32),
+            classified
+                .diff_rev
+                .as_ref()
+                .map(|d| d.author_timestamp_differs as i32),
+            classified
+                .diff_rev
+                .as_ref()
+                .map(|d| d.committer_timestamp_differs as i32),
+            classified.diff_dir.as_ref().map(|d| d.added as i32),
+            classified.diff_dir.as_ref().map(|d| d.deleted as i32),
+            classified.diff_dir.as_ref().map(|d| d.modified as i32),
+            classified.diff_dir.as_ref().map(|d| d.renamed as i32),
+        ])?;
+
+        if let Some(ref dir_diff) = classified.diff_dir {
+            for file in &dir_diff.added_files {
+                stmt_files.execute(rusqlite::params![
+                    &ta.origin_url,
+                    &ta.tag_name,
+                    &ta.type_,
+                    &ta.old_snapshot,
+                    ta.old_snap_timestamp,
+                    &ta.new_snapshot,
+                    ta.new_snap_timestamp,
+                    &classified.old_directory_swhid,
+                    &classified.new_directory_swhid,
+                    file,
+                    "added"
+                ])?;
+            }
+            for file in &dir_diff.deleted_files {
+                stmt_files.execute(rusqlite::params![
+                    &ta.origin_url,
+                    &ta.tag_name,
+                    &ta.type_,
+                    &ta.old_snapshot,
+                    ta.old_snap_timestamp,
+                    &ta.new_snapshot,
+                    ta.new_snap_timestamp,
+                    &classified.old_directory_swhid,
+                    &classified.new_directory_swhid,
+                    file,
+                    "deleted"
+                ])?;
+            }
+            for file in &dir_diff.modified_files {
+                stmt_files.execute(rusqlite::params![
+                    &ta.origin_url,
+                    &ta.tag_name,
+                    &ta.type_,
+                    &ta.old_snapshot,
+                    ta.old_snap_timestamp,
+                    &ta.new_snapshot,
+                    ta.new_snap_timestamp,
+                    &classified.old_directory_swhid,
+                    &classified.new_directory_swhid,
+                    file,
+                    "modified"
+                ])?;
+            }
+        }
+        pb.inc(1);
+    }
+    pb.finish();
+
+    drop(stmt_diffs);
+    drop(stmt_files);
+
+    // Commit the transaction
+    tx.commit()?;
+
+    Ok(())
 }
