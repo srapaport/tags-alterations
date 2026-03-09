@@ -3,7 +3,7 @@ use chrono::prelude::*;
 use dotenv::dotenv;
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs::File;
 use std::io::Write;
@@ -12,12 +12,20 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use swh_graph::labels::EdgeLabel;
 use swh_graph::mph::DynMphf;
 use swh_graph::{NodeType, graph::*};
+use tags_alterations::lib_tmp::snapshots_extraction;
 
 #[derive(Debug, Clone, Default)]
 struct MonthlyCounters {
     lightweight: usize,
     annotated: usize,
     unknown: usize,
+}
+
+#[derive(Debug, Clone, Default)]
+struct MonthlyNetCounters {
+    tags_added: usize,
+    tags_removed: usize,
+    net_change: isize,
 }
 
 static COUNTER_INVALID_UTF8_BRANCH_NAME: AtomicUsize = AtomicUsize::new(0);
@@ -28,8 +36,229 @@ static COUNTER_TAG_NO_TIMESTAMP: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_ORIGIN_ANALYZED: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_ORIGIN_URL_NOT_UTF8: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_ORIGIN_WITH_TAG: AtomicUsize = AtomicUsize::new(0);
+static COUNTER_TAGS_ADDED: AtomicUsize = AtomicUsize::new(0);
+static COUNTER_TAGS_REMOVED: AtomicUsize = AtomicUsize::new(0);
+static COUNTER_TAGS_REAPPEARED: AtomicUsize = AtomicUsize::new(0);
+static COUNTER_SNAPSHOTS_PROCESSED: AtomicUsize = AtomicUsize::new(0);
+static COUNTER_INSUFFICIENT_SNAPSHOTS: AtomicUsize = AtomicUsize::new(0);
 
+// Helper function to extract all tags from a snapshot (without differentiating type)
+fn get_snapshot_tags<G: SwhFullGraph>(snapshot: usize, graph: &G) -> HashSet<String> {
+    let mut tags = HashSet::new();
+    for (succ, labels) in graph.labeled_successors(snapshot) {
+        let succ_type = graph.properties().node_type(succ);
+        if ![NodeType::Release, NodeType::Revision].contains(&succ_type) {
+            continue;
+        }
+        for label in labels {
+            if let EdgeLabel::Branch(branch) = label {
+                let Ok(branch_name) =
+                    String::from_utf8(graph.properties().label_name(branch.label_name_id()))
+                else {
+                    COUNTER_INVALID_UTF8_BRANCH_NAME.fetch_add(1, Ordering::Relaxed);
+                    continue;
+                };
+                if branch_name.contains("/tags/") {
+                    tags.insert(branch_name);
+                }
+            }
+        }
+    }
+    tags
+}
+
+// Main function that tracks net tag changes between snapshots
 fn main() -> Result<()> {
+    dotenv()?;
+    let graph_basename = env::var("GRAPH_BASENAME").expect("GRAPH_BASENAME not set");
+    let suffix = env::var("DATASET_SUFFIX").unwrap_or_else(|_| "full_2025-10_v2".to_string());
+    
+    println!("Load graph...");
+    let graph = SwhBidirectionalGraph::new(graph_basename)?
+        .load_all_properties::<DynMphf>()?
+        .load_forward_labels()?
+        .load_backward_labels()?;
+
+    println!("Extract snapshots from ORC files...");
+    let origin_snapshots = snapshots_extraction(&suffix)?;
+    let total_origins = origin_snapshots.len();
+    println!("Extracted {} origins with snapshots", total_origins);
+
+    println!("Start tracking tag changes between snapshots...");
+    let pb = Arc::new(ProgressBar::new(total_origins as u64));
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template("{msg} [{bar:40.cyan/blue}] {pos}/{len} origins {percent}% ({per_sec}, {eta})")?
+            .progress_chars("#>-"),
+    );
+    pb.set_message("Processing origins");
+
+    let monthly_stats: HashMap<(i32, u32), MonthlyNetCounters> = origin_snapshots
+        .into_par_iter()
+        .filter_map(|(origin_url, snapshot_infos)| {
+            let pb = Arc::clone(&pb);
+            let mut local_monthly: HashMap<(i32, u32), MonthlyNetCounters> = HashMap::new();
+            
+            // Get origin node from URL
+            let origin_swhid = swh_graph::SWHID::from_origin_url(&origin_url);
+            let _origin = match graph.properties().node_id(origin_swhid) {
+                Ok(node) => node,
+                Err(_) => {
+                    COUNTER_ORIGIN_URL_NOT_UTF8.fetch_add(1, Ordering::Relaxed);
+                    pb.inc(1);
+                    return None;
+                }
+            };
+            
+            COUNTER_ORIGIN_ANALYZED.fetch_add(1, Ordering::Relaxed);
+            
+            // Convert SnapshotInfo to (node_id, timestamp) pairs
+            let mut snapshots = vec![];
+            for info in snapshot_infos {
+                let Some(snapshot_swhid_hash) = info.snapshot else {
+                    continue;
+                };
+                let snapshot_swhid = format!("swh:1:snp:{}", snapshot_swhid_hash);
+                if let Ok(snapshot_node) = graph.properties().node_id(snapshot_swhid.as_str()) {
+                    snapshots.push((snapshot_node, info.date_seconds as u64));
+                }
+            }
+            
+            if snapshots.is_empty() {
+                pb.inc(1);
+                return None;
+            }
+            
+            snapshots.sort_unstable_by_key(|snapshot| snapshot.1);
+            
+            // Process snapshots chronologically, tracking changes
+            let mut previous_tags: Option<HashSet<String>> = None;
+            
+            for &(snapshot, timestamp) in &snapshots {
+                COUNTER_SNAPSHOTS_PROCESSED.fetch_add(1, Ordering::Relaxed);
+                let current_tags = get_snapshot_tags(snapshot, &graph);
+                
+                if let Some(prev_tags) = previous_tags {
+                    // Calculate additions and removals from previous snapshot
+                    let added: HashSet<_> = current_tags.difference(&prev_tags).cloned().collect();
+                    let removed: HashSet<_> = prev_tags.difference(&current_tags).cloned().collect();
+                    
+                    let added_count = added.len();
+                    let removed_count = removed.len();
+                    
+                    if added_count > 0 || removed_count > 0 {
+                        // Track monthly statistics (using snapshot timestamp)
+                        let dt = Utc.timestamp_opt(timestamp as i64, 0).unwrap();
+                        let year_month = (dt.year(), dt.month());
+                        let counter = local_monthly
+                            .entry(year_month)
+                            .or_insert_with(MonthlyNetCounters::default);
+                        counter.tags_added += added_count;
+                        counter.tags_removed += removed_count;
+                        counter.net_change += added_count as isize - removed_count as isize;
+                        
+                        COUNTER_TAGS_ADDED.fetch_add(added_count, Ordering::Relaxed);
+                        COUNTER_TAGS_REMOVED.fetch_add(removed_count, Ordering::Relaxed);
+                    }
+                } else {
+                    // First snapshot - count all tags as "existing" (not as additions)
+                    if !current_tags.is_empty() {
+                        COUNTER_ORIGIN_WITH_TAG.fetch_add(1, Ordering::Relaxed);
+                    }
+                }
+                
+                previous_tags = Some(current_tags);
+            }
+            
+            pb.inc(1);
+            Some(local_monthly)
+        })
+        .reduce(
+            || HashMap::new(),
+            |mut monthly_a, monthly_b| {
+                for ((year, month), counters) in monthly_b {
+                    let entry = monthly_a
+                        .entry((year, month))
+                        .or_insert_with(MonthlyNetCounters::default);
+                    entry.tags_added += counters.tags_added;
+                    entry.tags_removed += counters.tags_removed;
+                    entry.net_change += counters.net_change;
+                }
+                monthly_a
+            },
+        );
+
+    pb.finish_with_message("Processing complete");
+
+    let output = format_net_counters(&monthly_stats);
+    println!("{}", output);
+
+    let mut log_file = File::create("data/tags_count_net.log")?;
+    log_file.write_all(output.as_bytes())?;
+
+    Ok(())
+}
+
+fn format_net_counters(
+    monthly_stats: &HashMap<(i32, u32), MonthlyNetCounters>,
+) -> String {
+    let total_snapshots = COUNTER_SNAPSHOTS_PROCESSED.load(Ordering::Relaxed);
+    let total_added = COUNTER_TAGS_ADDED.load(Ordering::Relaxed);
+    let total_removed = COUNTER_TAGS_REMOVED.load(Ordering::Relaxed);
+    
+    let mut output = format!(
+        "\n\nTag Counting Results (net changes per month)\n\
+        ============================================\n\
+        Analyzed {} origins | Skipped {} origins (no UTF8 URL)\n\
+        Origins with tags: {}\n\
+        Total snapshots processed: {}\n\n\
+        Total changes:\n\
+          - Tags added: {}\n\
+          - Tags removed: {}\n\
+          - Net change: {}\n\
+        Invalid branch names (not UTF8): {}\n\n",
+        COUNTER_ORIGIN_ANALYZED.load(Ordering::Relaxed),
+        COUNTER_ORIGIN_URL_NOT_UTF8.load(Ordering::Relaxed),
+        COUNTER_ORIGIN_WITH_TAG.load(Ordering::Relaxed),
+        total_snapshots,
+        total_added,
+        total_removed,
+        (total_added as isize - total_removed as isize),
+        COUNTER_INVALID_UTF8_BRANCH_NAME.load(Ordering::Relaxed),
+    );
+
+    if !monthly_stats.is_empty() {
+        output.push_str("\nMonthly Evolution (Net Changes):\n");
+        output.push_str("=================================\n");
+        
+        let mut sorted_months: Vec<_> = monthly_stats.iter().collect();
+        sorted_months.sort_by_key(|(key, _)| *key);
+        
+        output.push_str(&format!(
+            "{:<12} {:>12} {:>12} {:>12} {:>15}\n",
+            "Month", "Added", "Removed", "Net Change", "Cumulative"
+        ));
+        output.push_str(&format!("{:-<65}\n", ""));
+        
+        let mut cumulative = 0isize;
+        for (&(year, month), counters) in sorted_months {
+            cumulative += counters.net_change;
+            output.push_str(&format!(
+                "{:04}-{:02}      {:>12} {:>12} {:>12} {:>15}\n",
+                year, month,
+                counters.tags_added,
+                counters.tags_removed,
+                counters.net_change,
+                cumulative,
+            ));
+        }
+        output.push_str(&format!("\nFinal cumulative count: {}\n", cumulative));
+    }
+
+    output
+}
+
+fn main_old() -> Result<()> {
     dotenv()?;
     let graph_basename = env::var("GRAPH_BASENAME").expect("GRAPH_BASENAME not set");
     let amount_origins: u64 = env::var("ORIGINS")

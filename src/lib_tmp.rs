@@ -508,6 +508,12 @@ pub fn tags_check_full<G: SwhFullGraph + Sync>(
         //     work_sender.send((origin_url, snapshot_infos)).unwrap();
         // }
         for (origin_url, snapshot_infos) in snapshots {
+            let url = "https://github.com/evenfurther/pathfinding".to_string();
+            if origin_url != url {
+                skipped_count += 1;
+                pb.inc(1);
+                continue;
+            }
             if processed_origins.contains(&origin_url) {
                 skipped_count += 1;
                 pb.inc(1);
@@ -592,6 +598,7 @@ pub fn snapshots_extraction(suffix: &str) -> Result<HashMap<String, Vec<Snapshot
     let orc_dir = match suffix {
         "full_2025-10" => "/swh/scratch/graph/2025-10-08/orc/origin_visit_status/",
         "full_2025-10_v2" => "/swh/scratch/graph/2025-10-08/orc/origin_visit_status/",
+        "test" => "/swh/scratch/graph/2025-10-08/orc/origin_visit_status/",
         "teaser_2025-05" => {
             "/swh/scratch/rapaport/datasets/2025-05-28-popular-1k/orc/origin_visit_status/"
         },
