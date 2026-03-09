@@ -1,6 +1,7 @@
 use std::sync::LazyLock;
 
 use anyhow::Result;
+use chrono::NaiveDateTime;
 use indicatif::{ProgressBar, ProgressStyle};
 use num_format::{CustomFormat, Grouping, ToFormattedString};
 use rusqlite::Connection;
@@ -108,9 +109,9 @@ fn main() -> Result<()> {
 
     let start = Instant::now();
     println!("Querying database...");
-    let mut conn = Connection::open(format!("data/tags_alterations_full_2025-10_v2.db"))?;
+    let mut conn = Connection::open(format!("data/tags_alterations_full_2025-10_v2.db.bkp"))?;
     let table_exists = conn
-        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='tag_inconsistencies'")
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='tags_with_deletion_creation_detection'")
         .and_then(|mut stmt| stmt.exists([]))
         .unwrap_or(false);
 
@@ -119,58 +120,87 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
+    // todo!("query tags_with_deletion_creation_detection instead with a WHERE condidtion");
+    let min_date = NaiveDateTime::parse_from_str("2016-02-23 00:00:00", "%Y-%m-%d %H:%M:%S")
+        .unwrap()
+        .and_utc()
+        .format("%Y-%m-%d %H:%M:%S")
+        .to_string();
     let mut stmt = conn.prepare(
-        "SELECT 
-            ti.origin_url,
-            ti.tag_name,
-            ti.type,
-            ti.old_snapshot,
-            ti.old_snap_timestamp,
-            ti.old_revision,
-            ti.old_root_dir,
-            ti.new_snapshot,
-            ti.new_snap_timestamp,
-            dc.creation_type,
-            CASE 
-                WHEN ti.new_revision IS NOT NULL THEN 'Move'
-                ELSE 'Deletion'
-            END AS category,
-            CASE 
-                WHEN dc.creation_delta = dc.new_snap_timestamp
-                     AND ti.type = 'lightweight'
-                     AND dc.creation_type = 'annotated'
-                     AND ti.old_snap_timestamp < 1442534400
-                THEN 'non-legit'
-                WHEN dc.creation_delta IS NOT NULL THEN 'legit'
-                ELSE NULL
-            END AS status,
-            dc.creation_snapshot,
-            ti.new_revision,
-            ti.new_root_dir,
-            dc.creation_rev,
-            dc.creation_root_dir
-        FROM tag_inconsistencies ti
-        LEFT JOIN deletion_creation_v2 dc
-            ON ti.origin_url = dc.origin_url
-            AND ti.tag_name = dc.tag_name
-            AND ti.type = dc.type
-            AND ti.old_snapshot = dc.old_snapshot
-            AND ti.old_snap_timestamp = dc.old_snap_timestamp
-        WHERE category = 'Move' OR status = 'legit'",
+        "SELECT
+            origin_url,
+            tag_name,
+            type,
+            old_snapshot,
+            old_snap_timestamp,
+            old_revision,
+            old_root_dir,
+            new_snapshot,
+            new_snap_timestamp,
+            creation_type,
+            category,
+            status,
+            creation_snapshot,
+            new_revision,
+            new_root_dir,
+            creation_rev,
+            creation_root_dir
+            FROM tags_with_deletion_creation_detection
+            WHERE (status != 'non-legit' OR status IS NULL) AND (creation_root_dir IS NOT NULL OR new_root_dir IS NOT NULL) AND old_snap_timestamp >= ?1"
     )?;
 
+    // let mut stmt = conn.prepare(
+    //     "SELECT 
+    //         ti.origin_url,
+    //         ti.tag_name,
+    //         ti.type,
+    //         ti.old_snapshot,
+    //         ti.old_snap_timestamp,
+    //         ti.old_revision,
+    //         ti.old_root_dir,
+    //         ti.new_snapshot,
+    //         ti.new_snap_timestamp,
+    //         dc.creation_type,
+    //         CASE 
+    //             WHEN ti.new_revision IS NOT NULL THEN 'Move'
+    //             ELSE 'Deletion'
+    //         END AS category,
+    //         CASE 
+    //             WHEN dc.creation_delta = dc.new_snap_timestamp
+    //                  AND ti.type = 'lightweight'
+    //                  AND dc.creation_type = 'annotated'
+    //                  AND ti.old_snap_timestamp < 1442534400
+    //             THEN 'non-legit'
+    //             WHEN dc.creation_delta IS NOT NULL THEN 'legit'
+    //             ELSE NULL
+    //         END AS status,
+    //         dc.creation_snapshot,
+    //         ti.new_revision,
+    //         ti.new_root_dir,
+    //         dc.creation_rev,
+    //         dc.creation_root_dir
+    //     FROM tag_inconsistencies ti
+    //     LEFT JOIN deletion_creation_v2 dc
+    //         ON ti.origin_url = dc.origin_url
+    //         AND ti.tag_name = dc.tag_name
+    //         AND ti.type = dc.type
+    //         AND ti.old_snapshot = dc.old_snapshot
+    //         AND ti.old_snap_timestamp = dc.old_snap_timestamp
+    //     WHERE category = 'Move' OR status = 'legit'",
+    // )?;
+
     let rows: Vec<TagAlteration> = stmt
-        .query_map([], |row| {
+        .query_map([&min_date], |row| {
             Ok(TagAlteration {
                 origin_url: row.get(0)?,
                 tag_name: row.get(1)?,
                 type_: row.get(2)?,
                 old_snapshot: row.get(3)?,
-                old_snap_timestamp: row.get(4)?,
+                old_snap_timestamp: NaiveDateTime::parse_from_str(&row.get::<_, String>(4)?, "%Y-%m-%d %H:%M:%S").map_err(|e| rusqlite::Error::FromSqlConversionFailure(4, rusqlite::types::Type::Text, Box::new(e)))?.and_utc().timestamp(),
                 old_revision: row.get(5)?,
                 old_root_dir: row.get(6)?,
                 new_snapshot: row.get(7)?,
-                new_snap_timestamp: row.get(8)?,
+                new_snap_timestamp: NaiveDateTime::parse_from_str(&row.get::<_, String>(8)?, "%Y-%m-%d %H:%M:%S").map_err(|e| rusqlite::Error::FromSqlConversionFailure(8, rusqlite::types::Type::Text, Box::new(e)))?.and_utc().timestamp(),
                 creation_type: row.get(9)?,
                 category: row.get(10)?,
                 status: row.get(11)?,
@@ -181,7 +211,13 @@ fn main() -> Result<()> {
                 creation_root_dir: row.get(16)?,
             })
         })?
-        .filter_map(|r| r.ok())
+        .filter_map(|r| match r {
+            Ok(row) => Some(row),
+            Err(e) => {
+                eprintln!("Row error: {e}");
+                None
+            }
+        })
         .collect();
 
     drop(stmt); // Release the borrow on conn
@@ -881,7 +917,7 @@ fn write_diffs_to_db(conn: &mut Connection, results: &[(TagAlteration, Classifie
                     &ta.type_,
                     &ta.old_snapshot,
                     ta.old_snap_timestamp,
-                    &ta.new_snapshot,
+                    snapshot_to_use,
                     ta.new_snap_timestamp,
                     &classified.old_directory_swhid,
                     &classified.new_directory_swhid,
@@ -896,7 +932,7 @@ fn write_diffs_to_db(conn: &mut Connection, results: &[(TagAlteration, Classifie
                     &ta.type_,
                     &ta.old_snapshot,
                     ta.old_snap_timestamp,
-                    &ta.new_snapshot,
+                    snapshot_to_use,
                     ta.new_snap_timestamp,
                     &classified.old_directory_swhid,
                     &classified.new_directory_swhid,
@@ -911,7 +947,7 @@ fn write_diffs_to_db(conn: &mut Connection, results: &[(TagAlteration, Classifie
                     &ta.type_,
                     &ta.old_snapshot,
                     ta.old_snap_timestamp,
-                    &ta.new_snapshot,
+                    snapshot_to_use,
                     ta.new_snap_timestamp,
                     &classified.old_directory_swhid,
                     &classified.new_directory_swhid,
