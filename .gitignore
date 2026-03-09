@@ -29,3 +29,6 @@ data/*
 # Added by cargo
 
 /target
+*.pkl
+*.csv
+*.json
