@@ -1,0 +1,21 @@
+Loaded 35 entries from step2_altered_tag_matches.csv
+nixpkgs reference : nixpkgs
+Fetch timeout     : 120s per package
+Workers           : 8
+
+Unique attr_paths to build: 32
+
+Results saved to step3_build_check_results.csv
+
+============================================================
+SUMMARY
+============================================================
+  success        : 29
+  hash_mismatch  : 3 ✗  ← reproducibility issue confirmed
+  build_error    : 3
+
+Packages with hash mismatch:
+                attr_path                                                hash                                            got_hash
+                 libv3270 sha256-Cn/to1/7mH1Ygjcx12mMf52PTcz4smy/+bwWH1mbT9s= sha256-tW3CPga8HooTEfe2zPKprrm3SoYM703L+EHl/WeI5P8=
+                 libv3270 sha256-Cn/to1/7mH1Ygjcx12mMf52PTcz4smy/+bwWH1mbT9s= sha256-tW3CPga8HooTEfe2zPKprrm3SoYM703L+EHl/WeI5P8=
+python3Packages.geometric sha256-hxNzyuupktUWDzZXXJNsVoC6m/kyE1fbfY5K6LiO+x0= sha256-+eZWqBmX3c1/NqeEL62E09zPp6GeKxImD8E7uo6a85o=

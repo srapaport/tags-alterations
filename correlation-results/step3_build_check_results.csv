@@ -1,0 +1,537 @@
+attr_path,pname,version,forge_type,origin_url,owner,repo,rev,rev_type,hash,fetch_url,altered_tag,sha_before_alteration,old_snap_timestamp,sha_after_alteration,alteration_detected_at,outcome,returncode,got_hash,stderr_tail,checked_at
+armips,armips,0.11.0,fetchFromGitHub,https://github.com/Kingcom/armips,Kingcom,armips,refs/tags/v0.11.0,tag,sha256-L+Uxww/WtvDJn1xZqoqA6Pkzq/98sy1qTxZbv6eEjbA=,https://github.com/Kingcom/armips/archive/refs/tags/v0.11.0.tar.gz,refs/tags/v0.11.0,swh:1:snp:18e62bde6a1e1933cca215d0cc2a5c9ded4cca88,1601828795,swh:1:snp:b02e6473e038a508e874bb6e990bbb8ee7f802ef,1643132643,success,0,,"ext-0.26' from 'https://cache.nixos.org'...
+copying path '/nix/store/wv5biyanr4nkzdrjs2h22f5gr3fs5wyh-nghttp2-1.67.1-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/7j18wxmqvp2jk5kpjwwyb6ky8kv5bd2x-openssl-3.6.1-bin' from 'https://cache.nixos.org'...
+copying path '/nix/store/61cj6q1qv2dibpmryaccn4drwc55ysv8-xz-5.8.2-bin' from 'https://cache.nixos.org'...
+copying path '/nix/store/jqhx3b3qcz339zk5bfxb11mhh7h4zglw-libssh2-1.11.1' from 'https://cache.nixos.org'...
+copying path '/nix/store/z4nj80nfcllba9n6drf4axylzb24s15k-file-5.45' from 'https://cache.nixos.org'...
+copying path '/nix/store/67a37s907bmcms143slallmjnsh2s7w8-patch-2.8' from 'https://cache.nixos.org'...
+copying path '/nix/store/23c6sxdfaa5r38ihc7y575vv7j4qs4sk-update-autotools-gnu-config-scripts-hook' from 'https://cache.nixos.org'...
+copying path '/nix/store/5knzc9w31z2yd666mnzv4sh67f1vhlka-zlib-1.3.1-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/chdj76m79c3lbwdn6bflwlqa2n2igx02-coreutils-9.10' from 'https://cache.nixos.org'...
+copying path '/nix/store/mp4002abjggfg0cqvyyan4x8snclnnmy-openssl-3.6.1-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/pbyr28bfpcmm7mmc6hbi4kg44kcdx0v2-curl-8.18.0' from 'https://cache.nixos.org'...
+copying path '/nix/store/6vg01x5m5ij9wcr47ahld29llivacgcb-curl-8.18.0-dev' from 'https://cache.nixos.org'...
+checking outputs of '/nix/store/ss4gxmgfcbqbzh4hn7isfs7rhqamc877-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/Kingcom/armips/archive/refs/tags/v0.11.0.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100 192.6k   0 192.6k   0      0 358.9k      0                              0
+source> unpacking source archive /nix/var/nix/builds/nix-92459-676045050/download.tar.gz",2026-03-07T17:55:11.483728+00:00
+cozy,cozy,1.3.0,fetchFromGitHub,https://github.com/geigi/cozy,geigi,cozy,refs/tags/1.3.0,tag,sha256-oMgdz2dny0u1XV13aHu5s8/pcAz8z/SAOf4hbCDsdjw,https://github.com/geigi/cozy/archive/refs/tags/1.3.0.tar.gz,refs/tags/1.3.0,swh:1:snp:bfeb954cf866b15c9b5118bf333789f952a5d2c9,1701696483,swh:1:snp:56415de1de815c995b40b61e9218e434be5791ff,1708152751,success,0,,"wyh-nghttp2-1.67.1-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/7bp4xz524b106ay6hxp27k83p50ziv4w-bzip2-1.0.8-bin' from 'https://cache.nixos.org'...
+copying path '/nix/store/z4nj80nfcllba9n6drf4axylzb24s15k-file-5.45' from 'https://cache.nixos.org'...
+copying path '/nix/store/5knzc9w31z2yd666mnzv4sh67f1vhlka-zlib-1.3.1-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/jqhx3b3qcz339zk5bfxb11mhh7h4zglw-libssh2-1.11.1' from 'https://cache.nixos.org'...
+copying path '/nix/store/67a37s907bmcms143slallmjnsh2s7w8-patch-2.8' from 'https://cache.nixos.org'...
+copying path '/nix/store/23c6sxdfaa5r38ihc7y575vv7j4qs4sk-update-autotools-gnu-config-scripts-hook' from 'https://cache.nixos.org'...
+copying path '/nix/store/61cj6q1qv2dibpmryaccn4drwc55ysv8-xz-5.8.2-bin' from 'https://cache.nixos.org'...
+copying path '/nix/store/chdj76m79c3lbwdn6bflwlqa2n2igx02-coreutils-9.10' from 'https://cache.nixos.org'...
+copying path '/nix/store/mp4002abjggfg0cqvyyan4x8snclnnmy-openssl-3.6.1-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/pbyr28bfpcmm7mmc6hbi4kg44kcdx0v2-curl-8.18.0' from 'https://cache.nixos.org'...
+copying path '/nix/store/5f96fidrw1fhyv8kxmx1d31m7qymlqdd-gnugrep-3.12' from 'https://cache.nixos.org'...
+copying path '/nix/store/6vg01x5m5ij9wcr47ahld29llivacgcb-curl-8.18.0-dev' from 'https://cache.nixos.org'...
+checking outputs of '/nix/store/5n8x44ds35sd9qh7650srcypjmrs64wq-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/geigi/cozy/archive/refs/tags/1.3.0.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100 324.3k   0 324.3k   0      0 597.7k      0                              0
+source> unpacking source archive /nix/var/nix/builds/nix-92470-806730757/download.tar.gz",2026-03-07T17:55:11.698946+00:00
+cozy,cozy,1.3.0,fetchFromGitHub,https://github.com/geigi/cozy,geigi,cozy,refs/tags/1.3.0,tag,sha256-oMgdz2dny0u1XV13aHu5s8/pcAz8z/SAOf4hbCDsdjw,https://github.com/geigi/cozy/archive/refs/tags/1.3.0.tar.gz,refs/tags/1.3.0,swh:1:snp:56415de1de815c995b40b61e9218e434be5791ff,1708152751,swh:1:snp:f4e81bc603947f1644e193f8edc92c3707659ab0,1710720774,success,0,,"wyh-nghttp2-1.67.1-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/7bp4xz524b106ay6hxp27k83p50ziv4w-bzip2-1.0.8-bin' from 'https://cache.nixos.org'...
+copying path '/nix/store/z4nj80nfcllba9n6drf4axylzb24s15k-file-5.45' from 'https://cache.nixos.org'...
+copying path '/nix/store/5knzc9w31z2yd666mnzv4sh67f1vhlka-zlib-1.3.1-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/jqhx3b3qcz339zk5bfxb11mhh7h4zglw-libssh2-1.11.1' from 'https://cache.nixos.org'...
+copying path '/nix/store/67a37s907bmcms143slallmjnsh2s7w8-patch-2.8' from 'https://cache.nixos.org'...
+copying path '/nix/store/23c6sxdfaa5r38ihc7y575vv7j4qs4sk-update-autotools-gnu-config-scripts-hook' from 'https://cache.nixos.org'...
+copying path '/nix/store/61cj6q1qv2dibpmryaccn4drwc55ysv8-xz-5.8.2-bin' from 'https://cache.nixos.org'...
+copying path '/nix/store/chdj76m79c3lbwdn6bflwlqa2n2igx02-coreutils-9.10' from 'https://cache.nixos.org'...
+copying path '/nix/store/mp4002abjggfg0cqvyyan4x8snclnnmy-openssl-3.6.1-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/pbyr28bfpcmm7mmc6hbi4kg44kcdx0v2-curl-8.18.0' from 'https://cache.nixos.org'...
+copying path '/nix/store/5f96fidrw1fhyv8kxmx1d31m7qymlqdd-gnugrep-3.12' from 'https://cache.nixos.org'...
+copying path '/nix/store/6vg01x5m5ij9wcr47ahld29llivacgcb-curl-8.18.0-dev' from 'https://cache.nixos.org'...
+checking outputs of '/nix/store/5n8x44ds35sd9qh7650srcypjmrs64wq-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/geigi/cozy/archive/refs/tags/1.3.0.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100 324.3k   0 324.3k   0      0 597.7k      0                              0
+source> unpacking source archive /nix/var/nix/builds/nix-92470-806730757/download.tar.gz",2026-03-07T17:55:11.698946+00:00
+dosbox-staging,dosbox-staging,0.82.2,fetchFromGitHub,https://github.com/dosbox-staging/dosbox-staging,dosbox-staging,dosbox-staging,refs/tags/v0.82.2,tag,sha256-u9W6TfHF+BNeoExcx98kCVJu1BNwWnvjBEg84evMnBw=,https://github.com/dosbox-staging/dosbox-staging/archive/refs/tags/v0.82.2.tar.gz,refs/tags/v0.82.2,swh:1:snp:c80dfec390768deb3eb595840cc3d47b1172da55,1745878057,swh:1:snp:d0b42e4f57b69fd3b994a95a61a330e308d3e073,1750434610,success,0,,"bin' from 'https://cache.nixos.org'...
+copying path '/nix/store/chdj76m79c3lbwdn6bflwlqa2n2igx02-coreutils-9.10' from 'https://cache.nixos.org'...
+copying path '/nix/store/z4nj80nfcllba9n6drf4axylzb24s15k-file-5.45' from 'https://cache.nixos.org'...
+copying path '/nix/store/7523pggzxfpxymkarxyivf0wrnk826rj-gettext-0.26' from 'https://cache.nixos.org'...
+copying path '/nix/store/jqhx3b3qcz339zk5bfxb11mhh7h4zglw-libssh2-1.11.1' from 'https://cache.nixos.org'...
+copying path '/nix/store/23c6sxdfaa5r38ihc7y575vv7j4qs4sk-update-autotools-gnu-config-scripts-hook' from 'https://cache.nixos.org'...
+copying path '/nix/store/61cj6q1qv2dibpmryaccn4drwc55ysv8-xz-5.8.2-bin' from 'https://cache.nixos.org'...
+copying path '/nix/store/5knzc9w31z2yd666mnzv4sh67f1vhlka-zlib-1.3.1-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/67a37s907bmcms143slallmjnsh2s7w8-patch-2.8' from 'https://cache.nixos.org'...
+copying path '/nix/store/mp4002abjggfg0cqvyyan4x8snclnnmy-openssl-3.6.1-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/5f96fidrw1fhyv8kxmx1d31m7qymlqdd-gnugrep-3.12' from 'https://cache.nixos.org'...
+copying path '/nix/store/pbyr28bfpcmm7mmc6hbi4kg44kcdx0v2-curl-8.18.0' from 'https://cache.nixos.org'...
+copying path '/nix/store/6vg01x5m5ij9wcr47ahld29llivacgcb-curl-8.18.0-dev' from 'https://cache.nixos.org'...
+checking outputs of '/nix/store/12j14xl6can6dic6lwbn9pn8nh5calbb-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/dosbox-staging/dosbox-staging/archive/refs/tags/v0.82.2.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100  6.38M   0  6.38M   0      0  5.31M      0           00:01              0
+source> unpacking source archive /nix/var/nix/builds/nix-92457-2454151705/download.tar.gz",2026-03-07T17:55:13.353776+00:00
+driftnet,driftnet,1.6.0,fetchFromGitHub,https://github.com/deiv/driftnet,deiv,driftnet,refs/tags/v1.6.0,tag,sha256-f7EPC/n3CyxVOXC6j43Nnwkgu/aDVst8lQpzfgegDsI=,https://github.com/deiv/driftnet/archive/refs/tags/v1.6.0.tar.gz,refs/tags/v1.6.0,swh:1:snp:0be0677e1b56037eaa6bf434b08d71d66c1acb7f,1745997224,swh:1:snp:8119fb6781ce62841ae1192723e5bfda0dea7ced,1747103621,success,0,,"2x-openssl-3.6.1-bin' from 'https://cache.nixos.org'...
+copying path '/nix/store/z4nj80nfcllba9n6drf4axylzb24s15k-file-5.45' from 'https://cache.nixos.org'...
+copying path '/nix/store/61cj6q1qv2dibpmryaccn4drwc55ysv8-xz-5.8.2-bin' from 'https://cache.nixos.org'...
+copying path '/nix/store/5knzc9w31z2yd666mnzv4sh67f1vhlka-zlib-1.3.1-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/7523pggzxfpxymkarxyivf0wrnk826rj-gettext-0.26' from 'https://cache.nixos.org'...
+copying path '/nix/store/jqhx3b3qcz339zk5bfxb11mhh7h4zglw-libssh2-1.11.1' from 'https://cache.nixos.org'...
+copying path '/nix/store/chdj76m79c3lbwdn6bflwlqa2n2igx02-coreutils-9.10' from 'https://cache.nixos.org'...
+copying path '/nix/store/67a37s907bmcms143slallmjnsh2s7w8-patch-2.8' from 'https://cache.nixos.org'...
+copying path '/nix/store/23c6sxdfaa5r38ihc7y575vv7j4qs4sk-update-autotools-gnu-config-scripts-hook' from 'https://cache.nixos.org'...
+copying path '/nix/store/mp4002abjggfg0cqvyyan4x8snclnnmy-openssl-3.6.1-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/5f96fidrw1fhyv8kxmx1d31m7qymlqdd-gnugrep-3.12' from 'https://cache.nixos.org'...
+copying path '/nix/store/pbyr28bfpcmm7mmc6hbi4kg44kcdx0v2-curl-8.18.0' from 'https://cache.nixos.org'...
+copying path '/nix/store/6vg01x5m5ij9wcr47ahld29llivacgcb-curl-8.18.0-dev' from 'https://cache.nixos.org'...
+checking outputs of '/nix/store/qxlip7aibn25gl1ad708h1sk283nx7bl-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/deiv/driftnet/archive/refs/tags/v1.6.0.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100  5.50M   0  5.50M   0      0  7.80M      0                              0
+source> unpacking source archive /nix/var/nix/builds/nix-92463-2029354227/download.tar.gz",2026-03-07T17:55:11.446184+00:00
+faraday-agent-dispatcher,faraday-agent-dispatcher,3.4.2,fetchFromGitHub,https://github.com/infobyte/faraday_agent_dispatcher,infobyte,faraday_agent_dispatcher,refs/tags/3.4.2,tag,sha256-Qr3ZGU4y7f6yHD78ecdv7a6IBFDpT+/4Yez0n/MenN0=,https://github.com/infobyte/faraday_agent_dispatcher/archive/refs/tags/3.4.2.tar.gz,refs/tags/3.4.2,swh:1:snp:1bc292c9f88b116ba209a32d3ceb75ba52b036f9,1720655821,swh:1:snp:c44391387690b21ef3df446d52f2af77cab4df15,1721613347,success,0,,"https://cache.nixos.org'...
+copying path '/nix/store/wv5biyanr4nkzdrjs2h22f5gr3fs5wyh-nghttp2-1.67.1-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/7bp4xz524b106ay6hxp27k83p50ziv4w-bzip2-1.0.8-bin' from 'https://cache.nixos.org'...
+copying path '/nix/store/67a37s907bmcms143slallmjnsh2s7w8-patch-2.8' from 'https://cache.nixos.org'...
+copying path '/nix/store/z4nj80nfcllba9n6drf4axylzb24s15k-file-5.45' from 'https://cache.nixos.org'...
+copying path '/nix/store/jqhx3b3qcz339zk5bfxb11mhh7h4zglw-libssh2-1.11.1' from 'https://cache.nixos.org'...
+copying path '/nix/store/23c6sxdfaa5r38ihc7y575vv7j4qs4sk-update-autotools-gnu-config-scripts-hook' from 'https://cache.nixos.org'...
+copying path '/nix/store/5knzc9w31z2yd666mnzv4sh67f1vhlka-zlib-1.3.1-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/61cj6q1qv2dibpmryaccn4drwc55ysv8-xz-5.8.2-bin' from 'https://cache.nixos.org'...
+copying path '/nix/store/chdj76m79c3lbwdn6bflwlqa2n2igx02-coreutils-9.10' from 'https://cache.nixos.org'...
+copying path '/nix/store/mp4002abjggfg0cqvyyan4x8snclnnmy-openssl-3.6.1-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/pbyr28bfpcmm7mmc6hbi4kg44kcdx0v2-curl-8.18.0' from 'https://cache.nixos.org'...
+copying path '/nix/store/6vg01x5m5ij9wcr47ahld29llivacgcb-curl-8.18.0-dev' from 'https://cache.nixos.org'...
+checking outputs of '/nix/store/39kjiqx82mc55gjbmraj19cads0zdz6b-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/infobyte/faraday_agent_dispatcher/archive/refs/tags/3.4.2.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100 814.0k   0 814.0k   0      0  1.17M      0                              0
+source> unpacking source archive /nix/var/nix/builds/nix-92456-3169536422/download.tar.gz",2026-03-07T17:55:11.954091+00:00
+gamemode,gamemode,1.8.2,fetchFromGitHub,https://github.com/FeralInteractive/gamemode,FeralInteractive,gamemode,refs/tags/1.8.2,tag,sha256-V0rewbSVOGFqJqXyCz4jXpuDM0EfjdkpGPl+WdDwI5I=,https://github.com/FeralInteractive/gamemode/archive/refs/tags/1.8.2.tar.gz,refs/tags/1.8.2,swh:1:snp:ce0233d3eb10836f2f1cbb6837e37d6294a6a0a5,1725054440,swh:1:snp:4030d251cc4786035ba073a598ce7192469a34d4,1726350566,success,0,,".1-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/7523pggzxfpxymkarxyivf0wrnk826rj-gettext-0.26' from 'https://cache.nixos.org'...
+copying path '/nix/store/7bp4xz524b106ay6hxp27k83p50ziv4w-bzip2-1.0.8-bin' from 'https://cache.nixos.org'...
+copying path '/nix/store/jqhx3b3qcz339zk5bfxb11mhh7h4zglw-libssh2-1.11.1' from 'https://cache.nixos.org'...
+copying path '/nix/store/z4nj80nfcllba9n6drf4axylzb24s15k-file-5.45' from 'https://cache.nixos.org'...
+copying path '/nix/store/61cj6q1qv2dibpmryaccn4drwc55ysv8-xz-5.8.2-bin' from 'https://cache.nixos.org'...
+copying path '/nix/store/5knzc9w31z2yd666mnzv4sh67f1vhlka-zlib-1.3.1-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/23c6sxdfaa5r38ihc7y575vv7j4qs4sk-update-autotools-gnu-config-scripts-hook' from 'https://cache.nixos.org'...
+copying path '/nix/store/67a37s907bmcms143slallmjnsh2s7w8-patch-2.8' from 'https://cache.nixos.org'...
+copying path '/nix/store/chdj76m79c3lbwdn6bflwlqa2n2igx02-coreutils-9.10' from 'https://cache.nixos.org'...
+copying path '/nix/store/mp4002abjggfg0cqvyyan4x8snclnnmy-openssl-3.6.1-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/pbyr28bfpcmm7mmc6hbi4kg44kcdx0v2-curl-8.18.0' from 'https://cache.nixos.org'...
+copying path '/nix/store/6vg01x5m5ij9wcr47ahld29llivacgcb-curl-8.18.0-dev' from 'https://cache.nixos.org'...
+checking outputs of '/nix/store/qcssm5pf5hlhf767x6425jxrny0xy0cd-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/FeralInteractive/gamemode/archive/refs/tags/1.8.2.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100  79877   0  79877   0      0 157.8k      0                              0
+source> unpacking source archive /nix/var/nix/builds/nix-92465-1763655388/download.tar.gz",2026-03-07T17:55:11.256444+00:00
+go-cve-search,go-cve-search,0.1.4,fetchFromGitHub,https://github.com/s-index/go-cve-search,s-index,go-cve-search,refs/tags/v0.1.4,tag,sha256-gx2No5XGflGY6TIU92gz9XrNDzd4NiSuxpbwxChlqWo=,https://github.com/s-index/go-cve-search/archive/refs/tags/v0.1.4.tar.gz,refs/tags/v0.1.4,swh:1:snp:8872f8aeab7db1e1c50eaa47fd41dbbf1c794897,1677392027,swh:1:snp:12922a6082a590698c4b2474e1b31c7df6b28ca9,1678991193,success,0,,"lallmjnsh2s7w8-patch-2.8' from 'https://cache.nixos.org'...
+copying path '/nix/store/chdj76m79c3lbwdn6bflwlqa2n2igx02-coreutils-9.10' from 'https://cache.nixos.org'...
+copying path '/nix/store/mp4002abjggfg0cqvyyan4x8snclnnmy-openssl-3.6.1-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/5f96fidrw1fhyv8kxmx1d31m7qymlqdd-gnugrep-3.12' from 'https://cache.nixos.org'...
+copying path '/nix/store/pbyr28bfpcmm7mmc6hbi4kg44kcdx0v2-curl-8.18.0' from 'https://cache.nixos.org'...
+copying path '/nix/store/lshl2bkmcbdsbb8qifm0r61s80w5kj8n-curl-8.18.0-bin' from 'https://cache.nixos.org'...
+copying path '/nix/store/0xkxjb418kdssdxx3c8filikjqhzxwcx-diffutils-3.12' from 'https://cache.nixos.org'...
+copying path '/nix/store/laagkkm7lnm746374c4cii932b77pmaw-findutils-4.10.0' from 'https://cache.nixos.org'...
+copying path '/nix/store/l8x5vj866jxykg5ha8fbagy2m3p6458c-libssh2-1.11.1-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/6vg01x5m5ij9wcr47ahld29llivacgcb-curl-8.18.0-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/l8jkq4dnsknlxz436w6gw5rcm09mvq6p-gnumake-4.4.1' from 'https://cache.nixos.org'...
+copying path '/nix/store/2q9piicbr4dws7xi4xggb1nqs08k541h-gnutar-1.35' from 'https://cache.nixos.org'...
+copying path '/nix/store/z8zhrwi26p9yv43cq5cqck2gd050zd1d-stdenv-darwin' from 'https://cache.nixos.org'...
+checking outputs of '/nix/store/aqbbip2mhs34pq31xp9x96ddygq3clzp-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/s-index/go-cve-search/archive/refs/tags/v0.1.4.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100  4.85M   0  4.85M   0      0  4.63M      0           00:01              0
+source> unpacking source archive /nix/var/nix/builds/nix-92466-35633204/download.tar.gz",2026-03-07T17:55:11.414020+00:00
+haunt,haunt,0.3.0,fetchgit,https://git.dthompson.us/haunt.git,,,refs/tags/v0.3.0,tag,sha256-i6MI0eaRiA/JNgkIBJGLAsqMnyJz47aavyD6kOL7sqU=,,refs/tags/v0.3.0,swh:1:snp:19638c9877c6766a4c5203653437346fe5cc2ac0,1687453166,swh:1:snp:dd7e7f1d145459c6f47916cb7f6ee0b2d9eb82e6,1702614077,success,0,," 'https://cache.nixos.org'...
+copying path '/nix/store/g01cfkaq4cnpr91n8sh50zynrjfissff-krb5-1.22.1-lib' from 'https://cache.nixos.org'...
+copying path '/nix/store/96sv0cscfahck41kqgsldyd8cdsvlwsm-libssh2-1.11.1' from 'https://cache.nixos.org'...
+copying path '/nix/store/z840bn6rgspm12yzfpcfhbmf1j3inyxn-ngtcp2-1.19.0' from 'https://cache.nixos.org'...
+copying path '/nix/store/nx46x0jqb7lbvpwx9iv7n4sm20aisyjl-readline-8.3p3' from 'https://cache.nixos.org'...
+copying path '/nix/store/zk0hi525wn70pm93gzgdbb5k07y6x2lm-bash-interactive-5.3p9' from 'https://cache.nixos.org'...
+copying path '/nix/store/figzlgahdchbcpd9kmaxraa5i5rr7a50-libunistring-1.4.1' from 'https://cache.nixos.org'...
+copying path '/nix/store/8gvx83ghqlsqxxmp5d2in3cqrpfi7n9i-libidn2-2.3.8' from 'https://cache.nixos.org'...
+copying path '/nix/store/9xgp2ijg4znkhbgnm652dnjl691qpp75-libpsl-0.21.5' from 'https://cache.nixos.org'...
+copying path '/nix/store/720lfjb95xm6bpv2jp52pd393as7c9qx-curl-8.18.0' from 'https://cache.nixos.org'...
+copying path '/nix/store/l76cijmw3brqdn3zns7k553lwdfl2hlm-git-minimal-2.53.0' from 'https://cache.nixos.org'...
+checking outputs of '/nix/store/5x81w9alzrsbwra98bniva1z1jvdwwvr-haunt.drv'...
+haunt> structuredAttrs is enabled
+haunt> exporting https://git.dthompson.us/haunt.git (rev refs/tags/v0.3.0) into /nix/store/brrlm0j2x2i4j1v5fivvad3b0aafqp3n-haunt
+haunt> Initialized empty Git repository in /nix/store/brrlm0j2x2i4j1v5fivvad3b0aafqp3n-haunt/.git/
+haunt> remote: Enumerating objects: 76, done.
+haunt> remote: Counting objects: 100% (76/76), done.
+haunt> remote: Compressing objects: 100% (72/72), done.
+haunt> remote: Total 76 (delta 13), reused 15 (delta 0), pack-reused 0 (from 0)
+haunt> Unpacking objects: 100% (76/76), 111.29 KiB | 690.00 KiB/s, done.
+haunt> From https://git.dthompson.us/haunt
+haunt>  * tag               v0.3.0     -> FETCH_HEAD
+haunt> Switched to a new branch 'fetchgit'
+haunt> refer to FETCH_HEAD as its original name refs/tags/v0.3.0
+haunt> removing `.git'...",2026-03-07T17:55:19.641639+00:00
+hjson,hjson,3.0.2,fetchFromGitHub,https://github.com/hjson/hjson-py,hjson,hjson-py,refs/tags/v3.0.2,tag,sha256-VrCLHfXShF45IEhGVQpryBzjxreQEunyghazDNKRh8k=,https://github.com/hjson/hjson-py/archive/refs/tags/v3.0.2.tar.gz,refs/tags/v3.0.2,swh:1:snp:a3c9fe9e15d0d0a2f034f32a34ae532e2e7a5401,1496270512,swh:1:snp:df15422b759ba5df754d320652a980a21de54112,1610154451,success,0,,"checking outputs of '/nix/store/4w8riagpwg4j7kjji33ddb09phrd7j96-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/hjson/hjson-py/archive/refs/tags/v3.0.2.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100  72965   0  72965   0      0 136.0k      0                              0
+source> unpacking source archive /nix/var/nix/builds/nix-92719-4150153760/download.tar.gz",2026-03-07T17:55:13.548133+00:00
+intel-ipsec-mb,intel-ipsec-mb,2.0.1,fetchFromGitHub,https://github.com/intel/intel-ipsec-mb,intel,intel-ipsec-mb,refs/tags/v2.0.1,tag,sha256-k/NoPMKbiWZ25tdomsPpv2gfhQuBHxzX6KRT1UY88Ko=,https://github.com/intel/intel-ipsec-mb/archive/refs/tags/v2.0.1.tar.gz,refs/tags/v2.0.1,swh:1:snp:4519eeb342e0c6cfd63a56e15c1ba23b3f02e446,1751486224,swh:1:snp:ecf47bedddfe65f8217fafe8643aa3fd4670bbbb,1754098212,success,0,,"checking outputs of '/nix/store/chjfgrr10yag7fprgrp11zwffi51fq7v-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/intel/intel-ipsec-mb/archive/refs/tags/v2.0.1.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100  2.38M   0  2.38M   0      0  2.74M      0                              0
+source> unpacking source archive /nix/var/nix/builds/nix-92731-2353660539/download.tar.gz",2026-03-07T17:55:15.209650+00:00
+ktimetracker,ktimetracker,6.0.0,fetchFromGitHub,https://github.com/KDE/ktimetracker,KDE,ktimetracker,refs/tags/v6.0.0,tag,sha256-SQjqNzmmt0AEQvGW4Vz5GldQcp7Q9rZvGG7mGugRwd8=,https://github.com/KDE/ktimetracker/archive/refs/tags/v6.0.0.tar.gz,refs/tags/v6.0.0,swh:1:snp:ba3ed19a3d295530fb42602da9babec24acba3f4,1745533770,swh:1:snp:cddea831193d1fc0e4165011534b751160f2e228,1750701507,success,0,,"checking outputs of '/nix/store/pprafk4ssknzyrlpids4gf4qwdvnzhvg-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/KDE/ktimetracker/archive/refs/tags/v6.0.0.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100  0.98M   0  0.98M   0      0  1.65M      0                              0
+source> unpacking source archive /nix/var/nix/builds/nix-92729-342383102/download.tar.gz",2026-03-07T17:55:14.120684+00:00
+libv3270,libv3270,5.5.0,fetchFromGitHub,https://github.com/PerryWerneck/libv3270,PerryWerneck,libv3270,refs/tags/5.5.0,tag,sha256-Cn/to1/7mH1Ygjcx12mMf52PTcz4smy/+bwWH1mbT9s=,https://github.com/PerryWerneck/libv3270/archive/refs/tags/5.5.0.tar.gz,refs/tags/5.5.0,swh:1:snp:408f44ad8ebabc3bb2af9de19828532ab8af10c9,1734188841,swh:1:snp:ba8ca04a1f63ede831117994f84f244121564323,1746081864,hash_mismatch,1,sha256-tW3CPga8HooTEfe2zPKprrm3SoYM703L+EHl/WeI5P8=,"checking outputs of '/nix/store/l8lv64b5y3lk9rslzjk8ckv2mh44j41i-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/PerryWerneck/libv3270/archive/refs/tags/5.5.0.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100 276.3k   0 276.3k   0      0 452.1k      0                              0
+source> unpacking source archive /nix/var/nix/builds/nix-92730-605015580/download.tar.gz
+❌ flake:nixpkgs#libv3270.src
+error: hash mismatch in fixed-output derivation '/nix/store/l8lv64b5y3lk9rslzjk8ckv2mh44j41i-source.drv':
+         specified: sha256-Cn/to1/7mH1Ygjcx12mMf52PTcz4smy/+bwWH1mbT9s=
+            got:    sha256-tW3CPga8HooTEfe2zPKprrm3SoYM703L+EHl/WeI5P8=",2026-03-07T17:55:13.970293+00:00
+libv3270,libv3270,5.5.0,fetchFromGitHub,https://github.com/PerryWerneck/libv3270,PerryWerneck,libv3270,refs/tags/5.5.0,tag,sha256-Cn/to1/7mH1Ygjcx12mMf52PTcz4smy/+bwWH1mbT9s=,https://github.com/PerryWerneck/libv3270/archive/refs/tags/5.5.0.tar.gz,refs/tags/5.5.0,swh:1:snp:ba8ca04a1f63ede831117994f84f244121564323,1746081864,swh:1:snp:eb104de0372cd03469106e7f2c8663f8724a3abc,1756902355,hash_mismatch,1,sha256-tW3CPga8HooTEfe2zPKprrm3SoYM703L+EHl/WeI5P8=,"checking outputs of '/nix/store/l8lv64b5y3lk9rslzjk8ckv2mh44j41i-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/PerryWerneck/libv3270/archive/refs/tags/5.5.0.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100 276.3k   0 276.3k   0      0 452.1k      0                              0
+source> unpacking source archive /nix/var/nix/builds/nix-92730-605015580/download.tar.gz
+❌ flake:nixpkgs#libv3270.src
+error: hash mismatch in fixed-output derivation '/nix/store/l8lv64b5y3lk9rslzjk8ckv2mh44j41i-source.drv':
+         specified: sha256-Cn/to1/7mH1Ygjcx12mMf52PTcz4smy/+bwWH1mbT9s=
+            got:    sha256-tW3CPga8HooTEfe2zPKprrm3SoYM703L+EHl/WeI5P8=",2026-03-07T17:55:13.970293+00:00
+medusa,medusa,2.3,fetchFromGitHub,https://github.com/jmk-foofus/medusa,jmk-foofus,medusa,refs/tags/2.3,tag,sha256-ftn5RBE3NYfjXLq8Gm92sbFW+M925BDuL/VmwfPYXpo=,https://github.com/jmk-foofus/medusa/archive/refs/tags/2.3.tar.gz,refs/tags/2.3,swh:1:snp:36fbc2f18b9b62e7e7d76968eed022f352c30c8e,1712175227,swh:1:snp:7e84d01e9fd3cb3befc422c4df216f2da92cba2e,1747647084,success,0,,"checking outputs of '/nix/store/224dar99bskdffwd1ag89z9xl50xrq7b-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/jmk-foofus/medusa/archive/refs/tags/2.3.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100 407.7k   0 407.7k   0      0 719.6k      0                              0
+source> unpacking source archive /nix/var/nix/builds/nix-92738-296929019/download.tar.gz",2026-03-07T17:55:13.864917+00:00
+mingtest,mingtest,0.2.1,fetchFromGitHub,https://github.com/craflin/mingtest,craflin,mingtest,refs/tags/0.2.1,tag,sha256-buFr5w+3YJ2gJeQ8YTsFrUMU9hWq/iAJ6cW6ykvETfM=,https://github.com/craflin/mingtest/archive/refs/tags/0.2.1.tar.gz,refs/tags/0.2.1,swh:1:snp:d935ba74f0eac72b6afa32cdc32c8ca6fc131655,1728411097,swh:1:snp:b3e57d03661018f9e79e3042c4816e9183c8bd30,1730332673,success,0,,"checking outputs of '/nix/store/x2b8k0bmm28r8fmkm8kd20pwhyn17g55-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/craflin/mingtest/archive/refs/tags/0.2.1.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100  21411   0  21411   0      0  41447      0                              0
+source> unpacking source archive /nix/var/nix/builds/nix-92749-3080386497/download.tar.gz",2026-03-07T17:55:13.617074+00:00
+ocamlPackages.landmarks,landmarks,1.5,fetchFromGitHub,https://github.com/LexiFi/landmarks,LexiFi,landmarks,refs/tags/v1.5,tag,sha256-eIq02D19OzDOrMDHE1Ecrgk+T6s9vj2X6B2HY+z+K8Q=,https://github.com/LexiFi/landmarks/archive/refs/tags/v1.5.tar.gz,refs/tags/v1.5,swh:1:snp:51cf2c389b8c246871da1b480aa38bdf8859fe5e,1737122494,swh:1:snp:f704be07c936abace95b762590ea007db739f015,1738616692,success,0,,"checking outputs of '/nix/store/vsh6b3bp9wg4pbipryq7062jbyclpvv2-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/LexiFi/landmarks/archive/refs/tags/v1.5.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100  35792   0  35792   0      0  75778      0                              0
+source> unpacking source archive /nix/var/nix/builds/nix-92842-3166368023/download.tar.gz",2026-03-07T17:55:15.273006+00:00
+ocamlPackages.samplerate,samplerate,0.1.6,fetchFromGitHub,https://github.com/savonet/ocaml-samplerate,savonet,ocaml-samplerate,refs/tags/v0.1.6,tag,sha256-N3PSUSZ1tKNJcNPSgye6+8QQXcZIez72jk/YdNNOEUA=,https://github.com/savonet/ocaml-samplerate/archive/refs/tags/v0.1.6.tar.gz,refs/tags/v0.1.6,swh:1:snp:7cf23ad84c282632262b9e461940d86b920207cc,1627912376,swh:1:snp:316345fe6580ea5d91e918f1086ac78c50ce07d6,1639253227,success,0,,"checking outputs of '/nix/store/zh2hp3j6ipc8x9zziisf2ckf2fijjlln-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/savonet/ocaml-samplerate/archive/refs/tags/v0.1.6.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100   6884   0   6884   0      0  10182      0                              0
+source> unpacking source archive /nix/var/nix/builds/nix-92892-790019597/download.tar.gz",2026-03-07T17:55:15.674708+00:00
+omnisharp-roslyn,omnisharp-roslyn,1.39.14,fetchFromGitHub,https://github.com/OmniSharp/omnisharp-roslyn,OmniSharp,omnisharp-roslyn,refs/tags/v1.39.14,tag,sha256-yWrb+Ov1syKjeer7CxmGzkf9qUJxQ0IoIRfyIiO8eI8=,https://github.com/OmniSharp/omnisharp-roslyn/archive/refs/tags/v1.39.14.tar.gz,refs/tags/v1.39.14,swh:1:snp:e58404ed672332b73ec8c55b2d6792df62d53105,1753307280,swh:1:snp:6ab03a47d1c19fe3e143bce89a8ed9ca92cead47,1753546291,success,0,,"checking outputs of '/nix/store/ml110076mj0nw4a82isndswa87j4vsxw-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/OmniSharp/omnisharp-roslyn/archive/refs/tags/v1.39.14.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100 592.4k   0 592.4k   0      0  1.07M      0                              0
+source> unpacking source archive /nix/var/nix/builds/nix-92906-2936583694/download.tar.gz",2026-03-07T17:55:16.599217+00:00
+onlykey,onlykey,5.5.0,fetchFromGitHub,https://github.com/trustcrypto/OnlyKey-App,trustcrypto,OnlyKey-App,refs/tags/v5.5.0,tag,sha256-8MSdr+ghCBPeGp63Yi1T+gyEwXOEUW3vqi9CrCmozrw=,https://github.com/trustcrypto/OnlyKey-App/archive/refs/tags/v5.5.0.tar.gz,refs/tags/v5.5.0,swh:1:snp:2a40744b22accfbb0175f428593bb373a6acb556,1678860885,swh:1:snp:d38aba9f507ad3c55c220c4706167bc2683dca23,1680948922,success,0,,"checking outputs of '/nix/store/7d89vqdl8pwvq6g1hc8a1fj27ysgxlcz-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/trustcrypto/OnlyKey-App/archive/refs/tags/v5.5.0.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100  9.31M   0  9.31M   0      0  9.32M      0                              0
+source> unpacking source archive /nix/var/nix/builds/nix-92912-3612794370/download.tar.gz",2026-03-07T17:55:17.161205+00:00
+python3Packages.chipwhisperer,chipwhisperer,5.7.0,fetchFromGitHub,https://github.com/newaetech/chipwhisperer,newaetech,chipwhisperer,refs/tags/5.7.0,tag,sha256-C7QP044QEP7vmz1lMseLtMTYoKn5SoFV/q9URY7yQ6I=,https://github.com/newaetech/chipwhisperer/archive/refs/tags/5.7.0.tar.gz,refs/tags/5.7.0,swh:1:snp:601e7372a41b7d9c80991eaa50b10b5091fd5e3a,1674126520,swh:1:snp:e979764ff41fda683e6618b89cf756025d7828a2,1738616522,success,0,,"checking outputs of '/nix/store/kv96bwbkyr2x59kcf2rg6pi54b47gcni-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/newaetech/chipwhisperer/archive/refs/tags/5.7.0.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100 31.87M   0 31.87M   0      0  5.90M      0           00:05          6.11M
+source> unpacking source archive /nix/var/nix/builds/nix-92918-3316937824/download.tar.gz",2026-03-07T17:55:24.373607+00:00
+python3Packages.e3-testsuite,e3-testsuite,27.2,fetchFromGitHub,https://github.com/AdaCore/e3-testsuite,AdaCore,e3-testsuite,refs/tags/v27.2,tag,sha256-qG8SHwogBle3demgFJCqcfCh5ktLvOqh2XSwxPCANFk=,https://github.com/AdaCore/e3-testsuite/archive/refs/tags/v27.2.tar.gz,refs/tags/v27.2,swh:1:snp:23604b488b31f7da30b22192216f23e210dde682,1750704723,swh:1:snp:79fac011d69f6d5554eb5a07804ddba654ff155a,1751680575,build_error,1,,"error: cannot download source from any mirror
+❌ flake:nixpkgs#python3Packages.e3-testsuite.src
+error: Cannot build '/nix/store/2jfz60ny1n879m1mwvkpjdxjm3vmvdp4-source.drv'.
+       Reason: builder failed with exit code 1.
+       Output paths:
+         /nix/store/9vsrs82z14a5sddk3ip6riyicmcz5gfy-source
+       Last 22 log lines:
+       > structuredAttrs is enabled
+       >
+       > trying https://github.com/AdaCore/e3-testsuite/archive/refs/tags/v27.2.tar.gz
+       >   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+       >                                  Dload  Upload  Total   Spent   Left   Speed
+       >   0      0   0      0   0      0      0      0                              0
+       >   0      0   0      0   0      0      0      0                              0
+       > curl: (22) The requested URL returned error: 404
+       > Warning: Problem (retrying all errors). Will retry in 1 second. 3 retries left.
+       >   0      0   0      0   0      0      0      0                              0
+       >   0      0   0      0   0      0      0      0                              0
+       > curl: (22) The requested URL returned error: 404
+       > Warning: Problem (retrying all errors). Will retry in 2 seconds. 2 retries
+       > Warning: left.
+       >   0      0   0      0   0      0      0      0                              0
+       >   0      0   0      0   0      0      0      0                              0
+       > curl: (22) The requested URL returned error: 404
+       > Warning: Problem (retrying all errors). Will retry in 4 seconds. 1 retry left.
+       >   0      0   0      0   0      0      0      0                              0
+       >   0      0   0      0   0      0      0      0                              0
+       > curl: (22) The requested URL returned error: 404
+       > error: cannot download source from any mirror
+       For full logs, run:
+         nix log /nix/store/2jfz60ny1n879m1mwvkpjdxjm3vmvdp4-source.drv",2026-03-07T17:55:23.325341+00:00
+python3Packages.geometric,geometric,1.1,fetchFromGitHub,https://github.com/leeping/geomeTRIC,leeping,geomeTRIC,refs/tags/1.1,tag,sha256-hxNzyuupktUWDzZXXJNsVoC6m/kyE1fbfY5K6LiO+x0=,https://github.com/leeping/geomeTRIC/archive/refs/tags/1.1.tar.gz,refs/tags/1.1,swh:1:snp:7c9abf1b09c28e6ab4d9b8b4d6609d47ee144a0a,1738118995,swh:1:snp:88f899c245e4b0b05a3fb71c924f75673b823d86,1738555356,hash_mismatch,1,sha256-+eZWqBmX3c1/NqeEL62E09zPp6GeKxImD8E7uo6a85o=,"checking outputs of '/nix/store/rprgridwp82x8gc353kd2s9x42j81m7q-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/leeping/geomeTRIC/archive/refs/tags/1.1.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100 38.40M   0 38.40M   0      0 12.02M      0           00:03         15.81M
+source> unpacking source archive /nix/var/nix/builds/nix-93011-3237857181/download.tar.gz
+❌ flake:nixpkgs#python3Packages.geometric.src
+error: hash mismatch in fixed-output derivation '/nix/store/rprgridwp82x8gc353kd2s9x42j81m7q-source.drv':
+         specified: sha256-hxNzyuupktUWDzZXXJNsVoC6m/kyE1fbfY5K6LiO+x0=
+            got:    sha256-+eZWqBmX3c1/NqeEL62E09zPp6GeKxImD8E7uo6a85o=",2026-03-07T17:55:20.851235+00:00
+python3Packages.hf-transfer,hf-transfer,0.1.9,fetchFromGitHub,https://github.com/huggingface/hf_transfer,huggingface,hf_transfer,refs/tags/v0.1.9,tag,sha256-mcU3YuJVfuwBvtLfqceV3glcJcpjSX7M3VjvbvLCxZg=,https://github.com/huggingface/hf_transfer/archive/refs/tags/v0.1.9.tar.gz,refs/tags/v0.1.9,swh:1:snp:1b6157277a9f46dc0d790075115702c778032eb6,1736228772,swh:1:snp:06278f6b2d19dac71bad6c230c359602e2c89578,1737359530,success,0,,"checking outputs of '/nix/store/9pgn5fmpal9iigwn1y2my9zykdxs3gl5-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/huggingface/hf_transfer/archive/refs/tags/v0.1.9.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100  24006   0  24006   0      0  46270      0                              0
+source> unpacking source archive /nix/var/nix/builds/nix-93016-3441858853/download.tar.gz",2026-03-07T17:55:16.730516+00:00
+python3Packages.hjson,hjson,3.0.2,fetchFromGitHub,https://github.com/hjson/hjson-py,hjson,hjson-py,refs/tags/v3.0.2,tag,sha256-VrCLHfXShF45IEhGVQpryBzjxreQEunyghazDNKRh8k=,https://github.com/hjson/hjson-py/archive/refs/tags/v3.0.2.tar.gz,refs/tags/v3.0.2,swh:1:snp:a3c9fe9e15d0d0a2f034f32a34ae532e2e7a5401,1496270512,swh:1:snp:df15422b759ba5df754d320652a980a21de54112,1610154451,success,0,,"checking outputs of '/nix/store/4w8riagpwg4j7kjji33ddb09phrd7j96-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/hjson/hjson-py/archive/refs/tags/v3.0.2.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100  72965   0  72965   0      0 236.2k      0                              0
+source> unpacking source archive /nix/var/nix/builds/nix-93048-954519244/download.tar.gz",2026-03-07T17:55:17.034131+00:00
+rhino,rhino,1.8.0,fetchFromGitHub,https://github.com/mozilla/rhino,mozilla,rhino,refs/tags/Rhino1_8_0_Release,tag,sha256-H8DbcRPMm4SKmGf40dXnjGeEbbj9COzdHgUIkcCimTM=,https://github.com/mozilla/rhino/archive/refs/tags/Rhino1_8_0_Release.tar.gz,refs/tags/Rhino1_8_0_Release,swh:1:snp:7f1280709bc2ef50b192ddab377a5025d4efd40f,1735618008,swh:1:snp:1f255d8c2f925c41ff8846bb569a388b9ad7c94b,1736448773,success,0,,"checking outputs of '/nix/store/wp9k0y60ar0yalj6400d08l89bndhn9a-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/mozilla/rhino/archive/refs/tags/Rhino1_8_0_Release.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100  4.77M   0  4.77M   0      0  4.21M      0           00:01              0
+source> unpacking source archive /nix/var/nix/builds/nix-93096-2724988550/download.tar.gz",2026-03-07T17:55:23.347629+00:00
+rita,rita,4.8.1,fetchFromGitHub,https://github.com/activecm/rita,activecm,rita,refs/tags/v4.8.1,tag,sha256-By0JvQ4LTm+NEnRMadE1x2PiiYqnJQCsF3Fy+gHulXs=,https://github.com/activecm/rita/archive/refs/tags/v4.8.1.tar.gz,refs/tags/v4.8.1,swh:1:snp:d73403094f9fe71651bd72c282886030e2edebf4,1702666220,swh:1:snp:26c8ad8119e5a381369018840b664fadd44b05fd,1720751339,build_error,1,,"L returned error: 404
+source> error: cannot download source from any mirror
+❌ flake:nixpkgs#rita.src
+error: Cannot build '/nix/store/6yiylwwq7zkv72gvczpgwqyzs5pxa4cw-source.drv'.
+       Reason: builder failed with exit code 1.
+       Output paths:
+         /nix/store/6si0nnj1xzq462vpli6mcm6f68npqa9w-source
+       Last 22 log lines:
+       > structuredAttrs is enabled
+       >
+       > trying https://github.com/activecm/rita/archive/refs/tags/v4.8.1.tar.gz
+       >   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+       >                                  Dload  Upload  Total   Spent   Left   Speed
+       >   0      0   0      0   0      0      0      0                              0
+       >   0      0   0      0   0      0      0      0                              0
+       > curl: (22) The requested URL returned error: 404
+       > Warning: Problem (retrying all errors). Will retry in 1 second. 3 retries left.
+       >   0      0   0      0   0      0      0      0                              0
+       >   0      0   0      0   0      0      0      0                              0
+       > curl: (22) The requested URL returned error: 404
+       > Warning: Problem (retrying all errors). Will retry in 2 seconds. 2 retries
+       > Warning: left.
+       >   0      0   0      0   0      0      0      0                              0
+       >   0      0   0      0   0      0      0      0                              0
+       > curl: (22) The requested URL returned error: 404
+       > Warning: Problem (retrying all errors). Will retry in 4 seconds. 1 retry left.
+       >   0      0   0      0   0      0      0      0                              0
+       >   0      0   0      0   0      0      0      0                              0
+       > curl: (22) The requested URL returned error: 404
+       > error: cannot download source from any mirror
+       For full logs, run:
+         nix log /nix/store/6yiylwwq7zkv72gvczpgwqyzs5pxa4cw-source.drv",2026-03-07T17:55:25.853421+00:00
+shelldap,shelldap,1.5.1,fetchFromGitHub,https://github.com/mahlonsmith/shelldap,mahlonsmith,shelldap,refs/tags/v1.5.1,tag,sha256-67ttAXzu9pfeqjfhMfLMb9vWCXTrE+iUDCbamqswaLg=,https://github.com/mahlonsmith/shelldap/archive/refs/tags/v1.5.1.tar.gz,refs/tags/v1.5.1,swh:1:snp:b476a46c2e1e4a8989ad68ae92501d97f1dd520a,1594840053,swh:1:snp:eefd1c6e61435a3390c868c28ac4daa82b7c14c3,1752088633,build_error,1,,"error: 404
+source> error: cannot download source from any mirror
+❌ flake:nixpkgs#shelldap.src
+error: Cannot build '/nix/store/fy7q48d4a12bcrkqig0398yh3shprkck-source.drv'.
+       Reason: builder failed with exit code 1.
+       Output paths:
+         /nix/store/l8r7w9wz11ahgssiais13jb3v3z5bl3f-source
+       Last 22 log lines:
+       > structuredAttrs is enabled
+       >
+       > trying https://github.com/mahlonsmith/shelldap/archive/refs/tags/v1.5.1.tar.gz
+       >   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+       >                                  Dload  Upload  Total   Spent   Left   Speed
+       >   0      0   0      0   0      0      0      0                              0
+       >   0      0   0      0   0      0      0      0                              0
+       > curl: (22) The requested URL returned error: 404
+       > Warning: Problem (retrying all errors). Will retry in 1 second. 3 retries left.
+       >   0      0   0      0   0      0      0      0                              0
+       >   0      0   0      0   0      0      0      0                              0
+       > curl: (22) The requested URL returned error: 404
+       > Warning: Problem (retrying all errors). Will retry in 2 seconds. 2 retries
+       > Warning: left.
+       >   0      0   0      0   0      0      0      0                              0
+       >   0      0   0      0   0      0      0      0                              0
+       > curl: (22) The requested URL returned error: 404
+       > Warning: Problem (retrying all errors). Will retry in 4 seconds. 1 retry left.
+       >   0      0   0      0   0      0      0      0                              0
+       >   0      0   0      0   0      0      0      0                              0
+       > curl: (22) The requested URL returned error: 404
+       > error: cannot download source from any mirror
+       For full logs, run:
+         nix log /nix/store/fy7q48d4a12bcrkqig0398yh3shprkck-source.drv",2026-03-07T17:55:26.052343+00:00
+smplayer,smplayer,25.6.0,fetchFromGitHub,https://github.com/smplayer-dev/smplayer,smplayer-dev,smplayer,refs/tags/v25.6.0,tag,sha256-txGz6v9hkvnrmVmBHsi1B2eC/iNT1tg4dU5AcMsSCic=,https://github.com/smplayer-dev/smplayer/archive/refs/tags/v25.6.0.tar.gz,refs/tags/v25.6.0,swh:1:snp:3a4eea037a412a568bc397c1d004033af8d3957d,1749433526,swh:1:snp:26cdea33dc097fb047b61877006915f7d66658ec,1750496074,success,0,,"checking outputs of '/nix/store/xdgb7zzs4p2p06690vvk698d7mgi09pv-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/smplayer-dev/smplayer/archive/refs/tags/v25.6.0.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100  6.59M   0  6.59M   0      0  5.52M      0           00:01              0
+source> unpacking source archive /nix/var/nix/builds/nix-93133-958292385/download.tar.gz",2026-03-07T17:55:20.188755+00:00
+softflowd,softflowd,1.1.1,fetchFromGitHub,https://github.com/irino/softflowd,irino,softflowd,refs/tags/softflowd-v1.1.1,tag,sha256-qWHwkXT1Lw8fe9nELaMB6EzAnNxsDvxiLWH3AacVZeA=,https://github.com/irino/softflowd/archive/refs/tags/softflowd-v1.1.1.tar.gz,refs/tags/softflowd-v1.1.1,swh:1:snp:3bd1da1a502451280ad4dd5a593294ff116b5314,1739965872,swh:1:snp:a0297213fdff3690e2a35a5b02ae215592604f78,1741816842,success,0,,"checking outputs of '/nix/store/kdpb715jbskxkf0l4wqd85awhrzxcysi-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/irino/softflowd/archive/refs/tags/softflowd-v1.1.1.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100 105.7k   0 105.7k   0      0 196.9k      0                              0
+source> unpacking source archive /nix/var/nix/builds/nix-93263-737979019/download.tar.gz",2026-03-07T17:55:21.174398+00:00
+sqlitebrowser,sqlitebrowser,3.13.1,fetchFromGitHub,https://github.com/sqlitebrowser/sqlitebrowser,sqlitebrowser,sqlitebrowser,refs/tags/v3.13.1,tag,sha256-bpZnO8i8MDgOm0f93pBmpy1sZLJQ9R4o4ZLnGfT0JRg=,https://github.com/sqlitebrowser/sqlitebrowser/archive/refs/tags/v3.13.1.tar.gz,refs/tags/v3.13.1,swh:1:snp:a42f4af9d86fb1f42bf5dd5e931fb29b0a97cfb0,1730799512,swh:1:snp:e35a10be909403f5c27f762d717fd7898d6ce154,1737495982,success,0,,"checking outputs of '/nix/store/krz9iizljil9xkp6zi5dwxqr8cjk3vrh-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/sqlitebrowser/sqlitebrowser/archive/refs/tags/v3.13.1.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100  4.69M   0  4.69M   0      0  5.10M      0                              0
+source> unpacking source archive /nix/var/nix/builds/nix-93285-2622030224/download.tar.gz",2026-03-07T17:55:23.237149+00:00
+superlu,superlu,7.0.1,fetchFromGitHub,https://github.com/xiaoyeli/superlu,xiaoyeli,superlu,refs/tags/v7.0.1,tag,sha256-MiQPhYIGZbvmtpIojrNzTG4Xao7lc4Ks/FtxlfdAKmQ=,https://github.com/xiaoyeli/superlu/archive/refs/tags/v7.0.1.tar.gz,refs/tags/v7.0.1,swh:1:snp:8858c4591ec090b4d713167bac277f09959a92e5,1745852013,swh:1:snp:85a93cd0a374875828d8d50e58336e07e91c06b3,1746817580,success,0,,"checking outputs of '/nix/store/9sy1xjvy44gslyjc7bwslqd11lm1hg0x-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/xiaoyeli/superlu/archive/refs/tags/v7.0.1.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100  2.39M   0  2.39M   0      0  3.18M      0                              0
+source> unpacking source archive /nix/var/nix/builds/nix-93303-3677799599/download.tar.gz",2026-03-07T17:55:23.459134+00:00
+trezord,trezord-go,2.0.33,fetchFromGitHub,https://github.com/trezor/trezord-go,trezor,trezord-go,refs/tags/v2.0.33,tag,sha256-3I6NOzDMhzRyVSOURl7TjJ1Z0P0RcKrSs5rNaZ0Ho9M=,,refs/tags/v2.0.33,swh:1:snp:a7e3e0f75f8f713b5fc5a3a181e4431ec94eff92,1681814931,swh:1:snp:bf7a93067f39bb32e4597532bd5e9dc8ab5b8882,1682473753,success,0,," refs/tags/v2.0.33) into /nix/store/rmlmkicrj461sg16xsd0v1hwdkx0wk68-source
+source> Initialized empty Git repository in /nix/store/rmlmkicrj461sg16xsd0v1hwdkx0wk68-source/.git/
+source> remote: Enumerating objects: 148, done.
+source> remote: Counting objects: 100% (148/148), done.
+source> remote: Compressing objects: 100% (131/131), done.
+source> remote: Total 148 (delta 11), reused 78 (delta 4), pack-reused 0 (from 0)
+source> Receiving objects: 100% (148/148), 486.43 KiB | 9.93 MiB/s, done.
+source> Resolving deltas: 100% (11/11), done.
+source> From https://github.com/trezor/trezord-go
+source>  * tag               v2.0.33    -> FETCH_HEAD
+source> Switched to a new branch 'fetchgit'
+source> refer to FETCH_HEAD as its original name refs/tags/v2.0.33
+source> Submodule 'usb/lowlevel/hidapi/c' (https://github.com/libusb/hidapi.git) registered for path 'usb/lowlevel/hidapi/c'
+source> Cloning into '/nix/store/rmlmkicrj461sg16xsd0v1hwdkx0wk68-source/usb/lowlevel/hidapi/c'...
+source> remote: Enumerating objects: 217, done.
+source> remote: Counting objects: 100% (217/217), done.
+source> remote: Compressing objects: 100% (156/156), done.
+source> remote: Total 217 (delta 60), reused 142 (delta 49), pack-reused 0 (from 0)
+source> Receiving objects: 100% (217/217), 366.37 KiB | 5.81 MiB/s, done.
+source> Resolving deltas: 100% (60/60), done.
+source> remote: Total 0 (delta 0), reused 0 (delta 0), pack-reused 0 (from 0)
+source> remote: Enumerating objects: 104, done.
+source> remote: Counting objects: 100% (104/104), done.
+source> remote: Compressing objects: 100% (46/46), done.
+source> remote: Total 56 (delta 40), reused 13 (delta 3), pack-reused 0 (from 0)
+source> Unpacking objects: 100% (56/56), 23.35 KiB | 442.00 KiB/s, done.
+source> From https://github.com/libusb/hidapi
+source>  * branch            76108294092c023a4ece99eb3219559cea0d5066 -> FETCH_HEAD
+source> Submodule path 'usb/lowlevel/hidapi/c': checked out '76108294092c023a4ece99eb3219559cea0d5066'
+source> removing `.git'...",2026-03-07T17:55:25.697691+00:00
+wifi-qr,wifi-qr,0.4,fetchFromGitHub,https://github.com/kokoye2007/wifi-qr,kokoye2007,wifi-qr,refs/tags/v0.4,tag,sha256-tE+9bFDgiFS1Jj+AAwTMKjMh5wS5/gkRSQaCBR/riYQ=,https://github.com/kokoye2007/wifi-qr/archive/refs/tags/v0.4.tar.gz,refs/tags/v0.4,swh:1:snp:71cee1001d42903a37aaea0a9a99b8aade2545ba,1734828234,swh:1:snp:9bfe1780a229a16d06913337ea0f73e69b6a07e9,1737558272,success,0,,"checking outputs of '/nix/store/nszc9ipix0qbvpiw1f4b6ifmcyn1s66y-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/kokoye2007/wifi-qr/archive/refs/tags/v0.4.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100 352.9k   0 352.9k   0      0 619.5k      0                              0
+source> unpacking source archive /nix/var/nix/builds/nix-93470-2619799238/download.tar.gz",2026-03-07T17:55:24.686505+00:00
+wifi-qr,wifi-qr,0.4,fetchFromGitHub,https://github.com/kokoye2007/wifi-qr,kokoye2007,wifi-qr,refs/tags/v0.4,tag,sha256-tE+9bFDgiFS1Jj+AAwTMKjMh5wS5/gkRSQaCBR/riYQ=,https://github.com/kokoye2007/wifi-qr/archive/refs/tags/v0.4.tar.gz,refs/tags/v0.4,swh:1:snp:9bfe1780a229a16d06913337ea0f73e69b6a07e9,1737558272,swh:1:snp:f423158debbc3f5ee55214804281581d8f2b7ba6,1740118401,success,0,,"checking outputs of '/nix/store/nszc9ipix0qbvpiw1f4b6ifmcyn1s66y-source.drv'...
+source> structuredAttrs is enabled
+source> 
+source> trying https://github.com/kokoye2007/wifi-qr/archive/refs/tags/v0.4.tar.gz
+source>   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+source>                                  Dload  Upload  Total   Spent   Left   Speed
+source>   0      0   0      0   0      0      0      0                              0
+source> 100 352.9k   0 352.9k   0      0 619.5k      0                              0
+source> unpacking source archive /nix/var/nix/builds/nix-93470-2619799238/download.tar.gz",2026-03-07T17:55:24.686505+00:00
