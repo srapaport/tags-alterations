@@ -34,7 +34,7 @@ print(f"[*] Nix tag references loaded : {len(nix_df):,}")
 # ------------------------------------------------------------------ #
 # 2. Load tag alterations from pickle
 # ------------------------------------------------------------------ #
-PICKLE_PATH = Path("tags_df_bis.pkl")
+PICKLE_PATH = Path("tags_df.pkl")
 
 print(f"[*] Loading tag alterations from: {PICKLE_PATH}")
 tags_df = pd.read_pickle(PICKLE_PATH)
