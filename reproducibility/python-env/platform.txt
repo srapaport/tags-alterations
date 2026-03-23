@@ -1,0 +1,1 @@
+Linux swh1.enst.fr 6.12.63+deb13-amd64 #1 SMP PREEMPT_DYNAMIC Debian 6.12.63-1 (2025-12-30) x86_64 GNU/Linux
