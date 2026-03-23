@@ -1,148 +1,101 @@
-# correlate_all_forges.py
-import json, re, sqlite3
+# correlate.py
+import json
 import pandas as pd
 from pathlib import Path
 
 # ------------------------------------------------------------------ #
-# 1. Load Nix extracted data
+# 1. Load Nix extracted sources
 # ------------------------------------------------------------------ #
+nix_path = sorted(Path(".").glob("nix-sources-*/tag-refs.json"))[-1]
+print(f"[*] Loading Nix sources from: {nix_path}")
 
-with open("nix-sources/raw-sources.json") as f:
-    raw = json.load(f)
+with open(nix_path) as f:
+    nix_raw = json.load(f)
 
-records = []
-for attr_path, pkg in raw.items():
-    src = pkg.get("src", {})
-    if not src:
-        continue
-    records.append({
-        "attr_path":  attr_path,
-        "pname":      pkg.get("pname"),
-        "version":    pkg.get("version"),
-        # source fields
-        "src_type":   src.get("type"),
-        "domain":     src.get("domain"),
-        "owner":      src.get("owner"),
-        "repo":       src.get("repo"),
-        "rev":        src.get("rev"),
-        "rev_type":   src.get("rev_type"),
-        "tag_name":   src.get("tag_name"),   # already "refs/tags/…" or null
-        "hash":       src.get("hash"),
-        "origin_url": src.get("origin_url"), # matches your DB column directly
-        "fetch_url":  src.get("fetch_url"),
-    })
+nix_df = pd.DataFrame([
+    {
+        "attr_path"  : pkg,
+        "pname"      : data["pname"],
+        "version"    : data["version"],
+        "forge_type" : data["src"]["type"],
+        "origin_url" : data["src"]["origin_url"],
+        "owner"      : data["src"].get("owner"),
+        "repo"       : data["src"].get("repo"),
+        "rev"        : data["src"]["rev"],
+        "rev_type"   : data["src"]["rev_type"],
+        "hash"       : data["src"]["hash"],
+        "fetch_url"  : data["src"].get("fetch_url"),
+    }
+    for pkg, data in nix_raw.items()
+])
 
-nix_df = pd.DataFrame(records)
-print(f"Total Nix packages with sources : {len(nix_df):>8,}")
-print(f"  tag-based refs                : {(nix_df.rev_type=='tag').sum():>8,}")
-print(f"  commit-based refs             : {nix_df.rev_type.str.startswith('commit').sum():>8,}")
-print(f"\nFetcher breakdown:\n{nix_df.src_type.value_counts().to_string()}")
-print(f"\nDomain breakdown:\n{nix_df.domain.value_counts().head(20).to_string()}")
+print(f"[*] Nix tag references loaded : {len(nix_df):,}")
 
 # ------------------------------------------------------------------ #
-# 2. Load tag alteration DB
+# 2. Load tag alterations from pickle
 # ------------------------------------------------------------------ #
+PICKLE_PATH = Path("tags_df_bis.pkl")
 
-conn = sqlite3.connect("tags_alterations_full_2025-10_v2.db")
-tags_df = pd.read_sql_query("""
-    SELECT
-        origin_url,
-        tag_name,
-        category,
-        platform,
-        old_snap_timestamp,
-        new_snap_timestamp,
-        old_revision,
-        new_revision,
-        rev_time_diff_days
-    FROM tag_inconsistencies
-""", conn)
-conn.close()
+print(f"[*] Loading tag alterations from: {PICKLE_PATH}")
+tags_df = pd.read_pickle(PICKLE_PATH)
 
-print(f"\nTag inconsistency DB rows: {len(tags_df):,}")
-print(f"  Alterations : {(tags_df.category=='Alteration').sum():,}")
-print(f"  Deletions   : {(tags_df.category=='Deletion').sum():,}")
+print(f"[*] Tag alterations loaded    : {len(tags_df):,}")
+print(f"[*] Unique repos in DB        : {tags_df['origin_url'].nunique():,}")
 
 # ------------------------------------------------------------------ #
-# 3. Normalise both sides for joining
+# 3. Step 1 — matching origins
 # ------------------------------------------------------------------ #
+shared_origins = set(nix_df["origin_url"]) & set(tags_df["origin_url"])
 
-# Strip refs/tags/ from the DB side so both sides use bare tag names
-tags_df["tag_bare"] = (
-    tags_df["tag_name"]
-    .str.replace(r"^refs/tags/", "", regex=True)
-    .str.strip()
-)
+print(f"\n[Step 1] Repos in both datasets                : {len(shared_origins):,}")
 
-# Nix side: strip refs/tags/ from tag_name too (already done in extractor,
-# but rev is the bare name — use rev directly as join key)
-nix_tags = nix_df[nix_df["rev_type"] == "tag"].copy()
+step1_df = nix_df[nix_df["origin_url"].isin(shared_origins)].copy()
+
+print(f"         Nix packages from those repos          : {len(step1_df):,}")
+print(f"         Unique attr_paths                      : {step1_df['attr_path'].nunique():,}")
 
 # ------------------------------------------------------------------ #
-# 4. Join on (origin_url, tag/rev)
-# The Nix extractor builds origin_url to match your DB convention
+# 4. Step 2 — matching origins AND altered tag
 # ------------------------------------------------------------------ #
-
-merged = nix_tags.merge(
+step2_df = step1_df.merge(
     tags_df,
     left_on  = ["origin_url", "rev"],
     right_on = ["origin_url", "tag_bare"],
     how      = "inner",
-    suffixes = ("_nix", "_db"),
-)
+).rename(columns={
+    "tag_bare"    : "altered_tag",
+    "old_snapshot"     : "sha_before_alteration",
+    "new_snapshot"     : "sha_after_alteration",
+    "new_snap_timestamp" : "alteration_detected_at",
+})
 
-print(f"\n{'='*60}")
-print(f"Nix packages whose pinned tag appears in alteration DB: {len(merged):,}")
-print(f"Unique Nix attributes affected : {merged['attr_path'].nunique():,}")
-print(f"Unique repos affected          : {merged['origin_url'].nunique():,}")
-
-print(f"\nBreakdown by category:\n{merged['category'].value_counts().to_string()}")
-print(f"\nBreakdown by platform:\n{merged['platform'].value_counts().to_string()}")
-print(f"\nBreakdown by fetcher type:\n{merged['src_type'].value_counts().to_string()}")
-
-# ------------------------------------------------------------------ #
-# 5. Risk tiers
-# ------------------------------------------------------------------ #
-
-# Tier 1 — tag moved to a DIFFERENT commit (active content change)
-tier1 = merged[merged["category"] == "Alteration"].copy()
-
-# Tier 2 — tag deleted (reproducibility broken, but no content swap)
-tier2 = merged[merged["category"] == "Deletion"].copy()
-
-# Within Tier 1: was the hash update reflected in nixpkgs?
-# (if sha256 stayed the same after tag move → nix build would FAIL,
-#  meaning the alteration was caught; if different → silent swap possible)
-# We can't know from static data alone, but we flag it for manual audit.
-
-print(f"\n⚠️  TIER 1 — Tag content changed (highest risk): {len(tier1):,}")
-print(tier1[[
-    "attr_path", "version", "origin_url", "rev",
-    "old_revision", "new_revision", "rev_time_diff_days"
-]].head(20).to_string(index=False))
-
-print(f"\n⚠️  TIER 2 — Tag deleted (reproducibility broken): {len(tier2):,}")
-print(tier2[["attr_path", "version", "origin_url", "rev"]].head(20).to_string(index=False))
+print(f"\n[Step 2] Packages whose pinned tag was altered : {len(step2_df):,}")
+print(f"         Unique attr_paths affected             : {step2_df['attr_path'].nunique():,}")
+print(f"         Unique repos affected                  : {step2_df['origin_url'].nunique():,}")
 
 # ------------------------------------------------------------------ #
-# 6. Export
+# 5. Save results
 # ------------------------------------------------------------------ #
+OUTPUT_DIR = Path("correlation-results")
+OUTPUT_DIR.mkdir(exist_ok=True)
 
-merged.to_csv("nix-all-forge-affected-packages.csv", index=False)
-tier1.to_json("tier1-tag-alterations.json",  orient="records", indent=2)
-tier2.to_json("tier2-tag-deletions.json",    orient="records", indent=2)
+step1_df.to_csv(OUTPUT_DIR  / "step1_shared_origins.csv",       index=False)
+step1_df.to_json(OUTPUT_DIR / "step1_shared_origins.json",      orient="records", indent=2)
 
-# Per-platform summary table (useful for paper)
-summary = (
-    merged
-    .groupby(["platform", "category", "src_type"])
-    .agg(
-        packages   = ("attr_path",  "nunique"),
-        repos      = ("origin_url", "nunique"),
-        mean_days  = ("rev_time_diff_days", "mean"),
-    )
-    .reset_index()
-    .sort_values(["platform", "category"])
-)
-print(f"\nPer-platform summary:\n{summary.to_string(index=False)}")
-summary.to_csv("per-platform-summary.csv", index=False)
+step2_df.to_csv(OUTPUT_DIR  / "step2_altered_tag_matches.csv",  index=False)
+step2_df.to_json(OUTPUT_DIR / "step2_altered_tag_matches.json", orient="records", indent=2)
+
+print(f"\n[+] Results written to {OUTPUT_DIR}/")
+
+# ------------------------------------------------------------------ #
+# 6. Preview
+# ------------------------------------------------------------------ #
+COLS = [
+    "attr_path", "pname", "version",
+    "origin_url", "rev",
+    "sha_before_alteration", "sha_after_alteration",
+    "alteration_detected_at", "fetch_url",
+]
+
+print("\n[Preview] First 10 affected packages:\n")
+print(step2_df[COLS].head(10).to_string(index=False))

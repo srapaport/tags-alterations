@@ -92,7 +92,7 @@ def classify(returncode: int, stderr: str) -> str:
 
 def build_package(attr_path: str, nixpkgs_ref: str, timeout: int) -> dict:
     """
-    Run `nix build <nixpkgs_ref>#<attr_path>.src --rebuild --no-link` 
+    Run `nix build <nixpkgs_ref>#<attr_path>.src --rebuild --no-link`
     and return a result dict.
 
     Building only the `.src` attribute fetches and hash-checks the upstream
