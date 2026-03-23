@@ -508,12 +508,14 @@ pub fn tags_check_full<G: SwhFullGraph + Sync>(
         //     work_sender.send((origin_url, snapshot_infos)).unwrap();
         // }
         for (origin_url, snapshot_infos) in snapshots {
+            ////////////////////////// TEST
             let url = "https://github.com/evenfurther/pathfinding".to_string();
             if origin_url != url {
                 skipped_count += 1;
                 pb.inc(1);
                 continue;
             }
+            ////////////////////////// TEST
             if processed_origins.contains(&origin_url) {
                 skipped_count += 1;
                 pb.inc(1);

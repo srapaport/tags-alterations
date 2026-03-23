@@ -23,9 +23,8 @@ struct MonthlyCounters {
 
 #[derive(Debug, Clone, Default)]
 struct MonthlyNetCounters {
-    tags_added: usize,
-    tags_removed: usize,
-    net_change: isize,
+    initial_observed: usize,
+    count_delta: isize,
 }
 
 static COUNTER_INVALID_UTF8_BRANCH_NAME: AtomicUsize = AtomicUsize::new(0);
@@ -36,10 +35,11 @@ static COUNTER_TAG_NO_TIMESTAMP: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_ORIGIN_ANALYZED: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_ORIGIN_URL_NOT_UTF8: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_ORIGIN_WITH_TAG: AtomicUsize = AtomicUsize::new(0);
-static COUNTER_TAGS_ADDED: AtomicUsize = AtomicUsize::new(0);
-static COUNTER_TAGS_REMOVED: AtomicUsize = AtomicUsize::new(0);
+static COUNTER_INITIAL_TAGS_OBSERVED: AtomicUsize = AtomicUsize::new(0);
+static COUNTER_OBSERVABLE_DELTA: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_TAGS_REAPPEARED: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_SNAPSHOTS_PROCESSED: AtomicUsize = AtomicUsize::new(0);
+static COUNTER_MONTHLY_SNAPSHOTS_SELECTED: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_INSUFFICIENT_SNAPSHOTS: AtomicUsize = AtomicUsize::new(0);
 
 // Helper function to extract all tags from a snapshot (without differentiating type)
@@ -67,6 +67,34 @@ fn get_snapshot_tags<G: SwhFullGraph>(snapshot: usize, graph: &G) -> HashSet<Str
     tags
 }
 
+// Faster tag counting for a snapshot: use label_name_id dedup instead of full tag strings.
+fn count_snapshot_tags<G: SwhFullGraph>(
+    snapshot: usize,
+    graph: &G,
+    is_tag_cache: &mut HashMap<swh_graph::labels::LabelNameId, bool>,
+) -> usize {
+    let mut tags = HashSet::new();
+    for (succ, labels) in graph.labeled_successors(snapshot) {
+        let succ_type = graph.properties().node_type(succ);
+        if ![NodeType::Release, NodeType::Revision].contains(&succ_type) {
+            continue;
+        }
+        for label in labels {
+            if let EdgeLabel::Branch(branch) = label {
+                let label_id = branch.label_name_id();
+                let is_tag = *is_tag_cache.entry(label_id).or_insert_with(|| {
+                    let name = graph.properties().label_name(label_id);
+                    name.windows(6).any(|w| w == b"/tags/")
+                });
+                if is_tag {
+                    tags.insert(label_id);
+                }
+            }
+        }
+    }
+    tags.len()
+}
+
 // Main function that tracks net tag changes between snapshots
 fn main() -> Result<()> {
     dotenv()?;
@@ -84,7 +112,7 @@ fn main() -> Result<()> {
     let total_origins = origin_snapshots.len();
     println!("Extracted {} origins with snapshots", total_origins);
 
-    println!("Start tracking tag changes between snapshots...");
+    println!("Start tracking observable tags with monthly snapshot collapsing...");
     let pb = Arc::new(ProgressBar::new(total_origins as u64));
     pb.set_style(
         ProgressStyle::default_bar()
@@ -112,62 +140,61 @@ fn main() -> Result<()> {
             
             COUNTER_ORIGIN_ANALYZED.fetch_add(1, Ordering::Relaxed);
             
-            // Convert SnapshotInfo to (node_id, timestamp) pairs
-            let mut snapshots = vec![];
+            // Keep only the latest snapshot per month for this origin.
+            let mut latest_by_month: HashMap<(i32, u32), (usize, u64)> = HashMap::new();
             for info in snapshot_infos {
                 let Some(snapshot_swhid_hash) = info.snapshot else {
                     continue;
                 };
                 let snapshot_swhid = format!("swh:1:snp:{}", snapshot_swhid_hash);
                 if let Ok(snapshot_node) = graph.properties().node_id(snapshot_swhid.as_str()) {
-                    snapshots.push((snapshot_node, info.date_seconds as u64));
+                    let timestamp = info.date_seconds as u64;
+                    let dt = Utc.timestamp_opt(timestamp as i64, 0).unwrap();
+                    let year_month = (dt.year(), dt.month());
+                    let entry = latest_by_month
+                        .entry(year_month)
+                        .or_insert((snapshot_node, timestamp));
+                    if timestamp > entry.1 {
+                        *entry = (snapshot_node, timestamp);
+                    }
                 }
             }
             
-            if snapshots.is_empty() {
+            if latest_by_month.is_empty() {
                 pb.inc(1);
                 return None;
             }
             
-            snapshots.sort_unstable_by_key(|snapshot| snapshot.1);
-            
-            // Process snapshots chronologically, tracking changes
-            let mut previous_tags: Option<HashSet<String>> = None;
-            
-            for &(snapshot, timestamp) in &snapshots {
+            let mut months: Vec<_> = latest_by_month.into_iter().collect();
+            months.sort_by_key(|(ym, _)| *ym);
+
+            let mut prev_count: Option<usize> = None;
+            let mut is_tag_cache = HashMap::new();
+
+            for (year_month, (snapshot, _timestamp)) in months {
+                COUNTER_MONTHLY_SNAPSHOTS_SELECTED.fetch_add(1, Ordering::Relaxed);
                 COUNTER_SNAPSHOTS_PROCESSED.fetch_add(1, Ordering::Relaxed);
-                let current_tags = get_snapshot_tags(snapshot, &graph);
-                
-                if let Some(prev_tags) = previous_tags {
-                    // Calculate additions and removals from previous snapshot
-                    let added: HashSet<_> = current_tags.difference(&prev_tags).cloned().collect();
-                    let removed: HashSet<_> = prev_tags.difference(&current_tags).cloned().collect();
-                    
-                    let added_count = added.len();
-                    let removed_count = removed.len();
-                    
-                    if added_count > 0 || removed_count > 0 {
-                        // Track monthly statistics (using snapshot timestamp)
-                        let dt = Utc.timestamp_opt(timestamp as i64, 0).unwrap();
-                        let year_month = (dt.year(), dt.month());
+                let current_count = count_snapshot_tags(snapshot, &graph, &mut is_tag_cache);
+
+                if let Some(prev) = prev_count {
+                    let delta = current_count as isize - prev as isize;
+                    if delta != 0 {
                         let counter = local_monthly
                             .entry(year_month)
                             .or_insert_with(MonthlyNetCounters::default);
-                        counter.tags_added += added_count;
-                        counter.tags_removed += removed_count;
-                        counter.net_change += added_count as isize - removed_count as isize;
-                        
-                        COUNTER_TAGS_ADDED.fetch_add(added_count, Ordering::Relaxed);
-                        COUNTER_TAGS_REMOVED.fetch_add(removed_count, Ordering::Relaxed);
+                        counter.count_delta += delta;
+                        COUNTER_OBSERVABLE_DELTA.fetch_add(delta.unsigned_abs(), Ordering::Relaxed);
                     }
-                } else {
-                    // First snapshot - count all tags as "existing" (not as additions)
-                    if !current_tags.is_empty() {
-                        COUNTER_ORIGIN_WITH_TAG.fetch_add(1, Ordering::Relaxed);
-                    }
+                } else if current_count > 0 {
+                    let counter = local_monthly
+                        .entry(year_month)
+                        .or_insert_with(MonthlyNetCounters::default);
+                    counter.initial_observed += current_count;
+                    COUNTER_ORIGIN_WITH_TAG.fetch_add(1, Ordering::Relaxed);
+                    COUNTER_INITIAL_TAGS_OBSERVED.fetch_add(current_count, Ordering::Relaxed);
                 }
-                
-                previous_tags = Some(current_tags);
+
+                prev_count = Some(current_count);
             }
             
             pb.inc(1);
@@ -180,9 +207,8 @@ fn main() -> Result<()> {
                     let entry = monthly_a
                         .entry((year, month))
                         .or_insert_with(MonthlyNetCounters::default);
-                    entry.tags_added += counters.tags_added;
-                    entry.tags_removed += counters.tags_removed;
-                    entry.net_change += counters.net_change;
+                    entry.initial_observed += counters.initial_observed;
+                    entry.count_delta += counters.count_delta;
                 }
                 monthly_a
             },
@@ -193,7 +219,7 @@ fn main() -> Result<()> {
     let output = format_net_counters(&monthly_stats);
     println!("{}", output);
 
-    let mut log_file = File::create("data/tags_count_net.log")?;
+    let mut log_file = File::create("data/counts/tags_count_net_v2.log")?;
     log_file.write_all(output.as_bytes())?;
 
     Ok(())
@@ -203,56 +229,64 @@ fn format_net_counters(
     monthly_stats: &HashMap<(i32, u32), MonthlyNetCounters>,
 ) -> String {
     let total_snapshots = COUNTER_SNAPSHOTS_PROCESSED.load(Ordering::Relaxed);
-    let total_added = COUNTER_TAGS_ADDED.load(Ordering::Relaxed);
-    let total_removed = COUNTER_TAGS_REMOVED.load(Ordering::Relaxed);
+    let total_monthly_snapshots = COUNTER_MONTHLY_SNAPSHOTS_SELECTED.load(Ordering::Relaxed);
+    let total_initial = COUNTER_INITIAL_TAGS_OBSERVED.load(Ordering::Relaxed);
+    let total_delta_magnitude = COUNTER_OBSERVABLE_DELTA.load(Ordering::Relaxed);
+    let total_delta: isize = monthly_stats.values().map(|c| c.count_delta).sum();
     
     let mut output = format!(
         "\n\nTag Counting Results (net changes per month)\n\
         ============================================\n\
         Analyzed {} origins | Skipped {} origins (no UTF8 URL)\n\
         Origins with tags: {}\n\
-        Total snapshots processed: {}\n\n\
-        Total changes:\n\
-          - Tags added: {}\n\
-          - Tags removed: {}\n\
-          - Net change: {}\n\
+        Monthly snapshots selected (latest/origin/month): {}\n\
+        Total snapshot counts executed: {}\n\n\
+                Total observed stock components:\n\
+                    - Initial observed tags (first snapshots): {}\n\
+          - Net delta after first month per origin: {}\n\
+          - Delta magnitude traversed: {}\n\
+                    - Final observable tags estimate: {}\n\
         Invalid branch names (not UTF8): {}\n\n",
         COUNTER_ORIGIN_ANALYZED.load(Ordering::Relaxed),
         COUNTER_ORIGIN_URL_NOT_UTF8.load(Ordering::Relaxed),
         COUNTER_ORIGIN_WITH_TAG.load(Ordering::Relaxed),
+        total_monthly_snapshots,
         total_snapshots,
-        total_added,
-        total_removed,
-        (total_added as isize - total_removed as isize),
+        total_initial,
+        total_delta,
+        total_delta_magnitude,
+        (total_initial as isize + total_delta),
         COUNTER_INVALID_UTF8_BRANCH_NAME.load(Ordering::Relaxed),
     );
 
     if !monthly_stats.is_empty() {
-        output.push_str("\nMonthly Evolution (Net Changes):\n");
+        output.push_str("\nMonthly Evolution (Observable Stock):\n");
         output.push_str("=================================\n");
         
         let mut sorted_months: Vec<_> = monthly_stats.iter().collect();
         sorted_months.sort_by_key(|(key, _)| *key);
         
         output.push_str(&format!(
-            "{:<12} {:>12} {:>12} {:>12} {:>15}\n",
-            "Month", "Added", "Removed", "Net Change", "Cumulative"
+            "{:<12} {:>12} {:>12} {:>15}\n",
+            "Month", "Initial", "Delta", "Observable"
         ));
-        output.push_str(&format!("{:-<65}\n", ""));
+        output.push_str(&format!("{:-<58}\n", ""));
         
-        let mut cumulative = 0isize;
+        let mut cumulative_observable = 0isize;
         for (&(year, month), counters) in sorted_months {
-            cumulative += counters.net_change;
+            cumulative_observable += counters.initial_observed as isize + counters.count_delta;
             output.push_str(&format!(
-                "{:04}-{:02}      {:>12} {:>12} {:>12} {:>15}\n",
+                "{:04}-{:02}      {:>12} {:>12} {:>15}\n",
                 year, month,
-                counters.tags_added,
-                counters.tags_removed,
-                counters.net_change,
-                cumulative,
+                counters.initial_observed,
+                counters.count_delta,
+                cumulative_observable,
             ));
         }
-        output.push_str(&format!("\nFinal cumulative count: {}\n", cumulative));
+        output.push_str(&format!(
+            "\nFinal cumulative observable tags: {}\n",
+            cumulative_observable
+        ));
     }
 
     output
