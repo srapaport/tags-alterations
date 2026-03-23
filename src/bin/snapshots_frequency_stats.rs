@@ -75,7 +75,7 @@ fn star_group(stars: f64) -> &'static str {
 
 fn main() -> Result<()> {
     // Open SQLite mapping origin_url -> stars
-    let db_path = "data/tags_alterations_full_2025-10_v2.db.bkp";
+    let db_path = "data/tags_alterations_full_2025-10_v2.db";
     let conn = Connection::open(db_path)?;
     println!("Loading stars from SQLite...");
 

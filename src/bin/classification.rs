@@ -109,7 +109,7 @@ fn main() -> Result<()> {
 
     let start = Instant::now();
     println!("Querying database...");
-    let mut conn = Connection::open(format!("data/tags_alterations_full_2025-10_v2.db.bkp"))?;
+    let mut conn = Connection::open(format!("data/tags_alterations_full_2025-10_v2.db"))?;
     let table_exists = conn
         .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='tags_with_deletion_creation_detection'")
         .and_then(|mut stmt| stmt.exists([]))

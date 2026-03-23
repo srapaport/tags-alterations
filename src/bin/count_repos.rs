@@ -85,7 +85,7 @@ fn main() -> Result<()> {
     let output = format_results(&monthly_origins);
     println!("{}", output);
 
-    let mut log_file = File::create(format!("data/commits_count_{}.log", suffix))?;
+    let mut log_file = File::create(format!("data/counts/commits_count_{}.log", suffix))?;
     log_file.write_all(output.as_bytes())?;
 
     Ok(())
