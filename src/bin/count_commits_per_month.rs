@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use chrono::prelude::*;
 use dotenv::dotenv;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -9,10 +9,9 @@ use std::fs::File;
 use std::io::Write;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use swh_graph::labels::EdgeLabel;
 use swh_graph::mph::DynMphf;
 use swh_graph::{NodeType, graph::*};
-use tags_alterations::lib_tmp::snapshots_extraction;
+use tags_alterations::snapshots_extraction;
 
 static COUNTER_ORIGIN_ANALYZED: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_ORIGIN_WITH_SNAPSHOTS: AtomicUsize = AtomicUsize::new(0);
@@ -52,7 +51,7 @@ fn main() -> Result<()> {
 
     let monthly_commits: HashMap<(i32, u32), usize> = origin_snapshots
         .into_par_iter()
-        .filter_map(|(origin_url, snapshots)| {
+        .filter_map(|(_, snapshots)| {
             COUNTER_ORIGIN_ANALYZED.fetch_add(1, Ordering::Relaxed);
 
             let mut local_monthly: HashMap<(i32, u32), usize> = HashMap::new();

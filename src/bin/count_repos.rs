@@ -9,7 +9,7 @@ use std::fs::File;
 use std::io::Write;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use tags_alterations::lib_tmp::snapshots_extraction;
+use tags_alterations::snapshots_extraction;
 
 static COUNTER_ORIGIN_ANALYZED: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_ORIGIN_WITH_SNAPSHOTS: AtomicUsize = AtomicUsize::new(0);

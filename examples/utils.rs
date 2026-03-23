@@ -1,12 +1,14 @@
 use anyhow::Result;
+use std::env;
 use swh_graph::labels::{EdgeLabel, VisitStatus};
 use swh_graph::mph::DynMphf;
 use swh_graph::{NodeType, graph::*};
 
 fn main() -> Result<()> {
-    let graph = SwhBidirectionalGraph::new(
-        "/home/infres/rapaport/datasets/2024-08-23-popular-500-python/compressed/graph",
-    )?
+    let graph_path = env::var("GRAPH_BASENAME").map_err(|_| {
+        anyhow::anyhow!("GRAPH_BASENAME is required for examples/utils.rs")
+    })?;
+    let graph = SwhBidirectionalGraph::new(graph_path)?
     .load_all_properties::<DynMphf>()?
     .load_forward_labels()?
     .load_backward_labels()?;

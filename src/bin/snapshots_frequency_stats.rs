@@ -6,7 +6,8 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
-use tags_alterations::lib_tmp::snapshots_extraction;
+use std::env;
+use tags_alterations::snapshots_extraction_with_dir;
 
 static COUNTER_SQL_ROWS_READ: AtomicUsize = AtomicUsize::new(0);
 static COUNTER_SQL_ROW_ERRORS: AtomicUsize = AtomicUsize::new(0);
@@ -74,13 +75,47 @@ fn star_group(stars: f64) -> &'static str {
 }
 
 fn main() -> Result<()> {
+    let args: Vec<String> = env::args().collect();
+    let get_arg = |flag: &str, env_key: &str| -> Option<String> {
+        args.windows(2)
+            .find(|w| w[0] == flag)
+            .map(|w| w[1].clone())
+            .or_else(|| env::var(env_key).ok())
+    };
+    let required_arg = |flag: &str, env_key: &str| -> Result<String> {
+        get_arg(flag, env_key).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Missing required input. Provide {} <value> or set {}",
+                flag,
+                env_key
+            )
+        })
+    };
+
+    let suffix = get_arg("--suffix", "DATASET_SUFFIX")
+        .unwrap_or_else(|| "full_2025-10_v2".to_string());
+    let db_path = get_arg("--db-path", "DB_PATH")
+        .unwrap_or_else(|| format!("data/tags_alterations_{}.db", suffix));
+    let orc_dir = required_arg("--orc-dir", "ORC_DIR")?;
+    let stars_table = get_arg("--stars-table", "STARS_TABLE")
+        .unwrap_or_else(|| "tags_with_stars".to_string());
+
+    if !stars_table.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return Err(anyhow::anyhow!(
+            "Invalid --stars-table value. Use only letters, digits, and underscore"
+        ));
+    }
+
     // Open SQLite mapping origin_url -> stars
-    let db_path = "data/tags_alterations_full_2025-10_v2.db";
     let conn = Connection::open(db_path)?;
     println!("Loading stars from SQLite...");
 
+    let count_query = format!(
+        "SELECT COUNT(*) FROM (SELECT DISTINCT origin_url FROM {} WHERE stars IS NOT NULL)",
+        stars_table
+    );
     let estimated_star_rows: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM (SELECT DISTINCT origin_url FROM tags_with_stars WHERE stars IS NOT NULL)",
+        &count_query,
         [],
         |row| row.get(0),
     )?;
@@ -92,7 +127,11 @@ fn main() -> Result<()> {
     );
     stars_pb.set_message("Loading stars");
     
-    let mut stmt = conn.prepare("SELECT DISTINCT origin_url, stars FROM tags_with_stars WHERE stars IS NOT NULL")?;
+    let stars_query = format!(
+        "SELECT DISTINCT origin_url, stars FROM {} WHERE stars IS NOT NULL",
+        stars_table
+    );
+    let mut stmt = conn.prepare(&stars_query)?;
     let mut origin_to_stars = HashMap::new();
     let rows = stmt.query_map([], |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, f64>(1)?))
@@ -113,9 +152,8 @@ fn main() -> Result<()> {
     stars_pb.finish_with_message("Stars loaded");
     println!("Loaded {} origins with stars.", origin_to_stars.len());
 
-    let suffix = "full_2025-10_v2";
     println!("Extracting snapshots with snapshots_extraction...");
-    let snapshots_by_origin = snapshots_extraction(suffix)?;
+    let snapshots_by_origin = snapshots_extraction_with_dir(&orc_dir, &suffix)?;
     let total_origins = snapshots_by_origin.len() as u64;
 
     const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;

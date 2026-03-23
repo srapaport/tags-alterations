@@ -5,6 +5,7 @@ use rayon::prelude::*;
 use rusqlite::Connection;
 use std::{
     collections::{HashMap, HashSet},
+    env,
     sync::{
         LazyLock,
         atomic::{AtomicUsize, Ordering},
@@ -12,7 +13,7 @@ use std::{
 };
 use swh_graph::mph::DynMphf;
 use swh_graph::{NodeType, graph::*, labels::EdgeLabel};
-use tags_alterations::lib_tmp::SnapshotInfo;
+use tags_alterations::SnapshotInfo;
 
 static NO_INITIALISATION: AtomicUsize = AtomicUsize::new(0);
 
@@ -425,19 +426,38 @@ fn spot_deletion_creation<G: SwhFullGraph>(
 }
 
 pub fn main() -> Result<()> {
-    // let graph = SwhBidirectionalGraph::new("/dev/shm/swh-graph/current/graph")?
-    //     .load_all_properties::<DynMphf>()?
-    //     .load_forward_labels()?
-    //     .load_backward_labels()?;
-    // let conn = Connection::open(format!("data/tags_alterations_full_2025-10_v2.db"))?;
-        let graph = SwhBidirectionalGraph::new("/swh/scratch/rapaport/datasets/2025-05-28-popular-1k/compressed/graph")?
+    let args: Vec<String> = env::args().collect();
+    let get_arg = |flag: &str, env_key: &str| -> Option<String> {
+        args.windows(2)
+            .find(|w| w[0] == flag)
+            .map(|w| w[1].clone())
+            .or_else(|| env::var(env_key).ok())
+    };
+    let required_arg = |flag: &str, env_key: &str| -> Result<String> {
+        get_arg(flag, env_key).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Missing required input. Provide {} <value> or set {}",
+                flag,
+                env_key
+            )
+        })
+    };
+
+    let graph_path = get_arg("--graph-basename", "GRAPH_BASENAME")
+        .unwrap_or_else(|| "/dev/shm/swh-graph/current/graph".to_string());
+    let suffix = get_arg("--suffix", "DATASET_SUFFIX")
+        .unwrap_or_else(|| "full_2025-10_v2".to_string());
+    let db_path = get_arg("--db-path", "DB_PATH")
+        .unwrap_or_else(|| format!("data/tags_alterations_{}.db", suffix));
+    let orc_dir = required_arg("--orc-dir", "ORC_DIR")?;
+
+    let graph = SwhBidirectionalGraph::new(graph_path)?
         .load_all_properties::<DynMphf>()?
         .load_forward_labels()?
         .load_backward_labels()?;
-    let conn = Connection::open(format!("data/tags_alterations_teaser_2025-05.db"))?;
+    let conn = Connection::open(db_path)?;
 
-    // let snapshots = tags_alterations::lib_tmp::snapshots_extraction("full_2025-10_v2")?;
-    let snapshots = tags_alterations::lib_tmp::snapshots_extraction("teaser_2025-05")?;
+    let snapshots = tags_alterations::snapshots_extraction_with_dir(&orc_dir, &suffix)?;
 
     deletion_creation(&graph, &conn, snapshots)?;
 

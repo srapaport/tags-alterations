@@ -3,6 +3,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use num_format::{CustomFormat, Grouping, ToFormattedString};
 use rayon::prelude::*;
 use rusqlite::{Connection, params};
+use std::env;
 use std::collections::HashSet;
 use std::sync::LazyLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -61,15 +62,30 @@ struct HistoryCheckResult {
 }
 
 fn main() -> Result<()> {
+    let args: Vec<String> = env::args().collect();
+    let get_arg = |flag: &str, env_key: &str| -> Option<String> {
+        args.windows(2)
+            .find(|w| w[0] == flag)
+            .map(|w| w[1].clone())
+            .or_else(|| env::var(env_key).ok())
+    };
+
+    let graph_path = get_arg("--graph-basename", "GRAPH_BASENAME")
+        .unwrap_or_else(|| "/dev/shm/swh-graph/current/graph".to_string());
+    let suffix = get_arg("--suffix", "DATASET_SUFFIX")
+        .unwrap_or_else(|| "full_2025-10_v2".to_string());
+    let db_path = get_arg("--db-path", "DB_PATH")
+        .unwrap_or_else(|| format!("data/tags_alterations_{}.db", suffix));
+
     println!("Loading graph...");
-    let graph = SwhBidirectionalGraph::new("/dev/shm/swh-graph/current/graph")?
+    let graph = SwhBidirectionalGraph::new(graph_path)?
         .load_all_properties::<DynMphf>()?
         .load_forward_labels()?
         .load_backward_labels()?;
 
     let start = Instant::now();
     println!("Querying database...");
-    let mut conn = Connection::open(format!("../data/tags_alterations_full_2025-10_v2.db"))?;
+    let mut conn = Connection::open(db_path)?;
 
     let table_exists = conn
         .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='tag_inconsistencies'")
