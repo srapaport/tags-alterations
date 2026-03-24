@@ -42,7 +42,6 @@ tar -czf "${CODE_ARCHIVE}" \
   --exclude='dist' \
   Cargo.toml \
   Cargo.lock \
-  README.md \
   src \
   notebooks \
   reproducibility \
